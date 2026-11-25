@@ -1,5 +1,7 @@
 # offsave
 
+[![CI](https://github.com/3pino/offsave/actions/workflows/ci.yml/badge.svg)](https://github.com/3pino/offsave/actions/workflows/ci.yml)
+
 友達どうしで、お互いのスクリーンタイムを見守るアプリ。Android / Windows / Linux 向け（いまは **Android** が動きます）。
 
 - 友達があなたの制限（アプリ・サイトの使用時間、使えない時間帯）を決める。
@@ -23,6 +25,18 @@ Android ── WebSocket（60 秒ごとのハートビート）──▶ サー�
 - 複数のデバイスの利用は、重なった時間を二重に数えず、合計で数える。
 - 1 日の境界は、既定で午前 4 時（ユーザーごとに変更でき、変更は友達に通知される）。
 - 端末の時計を動かしても、日付や制限は動かない（サーバーの時刻を基準に、経過時間で進める）。
+
+## ビルド済みのファイルを使う
+
+[Actions](https://github.com/3pino/offsave/actions/workflows/ci.yml) の最新の成功した実行の「Artifacts」から取れます（GitHub にログインが必要）。
+
+| ファイル | 内容 |
+|---|---|
+| `offsave-server-linux-x86_64` | サーバー（Linux x86_64） |
+| `offsave-android-arm64-debug` | Android の APK（arm64の実機向け。デバッグ署名） |
+| `offsave-desktop-linux` / `offsave-desktop-windows` | デスクトップ版（友達の状況を見るダッシュボード） |
+
+APK のデバッグ署名の鍵は、ビルドのたびに変わります。入れ替えるときは、先にアンインストールが要ります（端末管理者を有効にしている場合は、先に無効にする）。
 
 ## サーバーを動かす（管理者）
 
