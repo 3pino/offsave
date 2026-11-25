@@ -208,9 +208,11 @@ async fn handle(
             {
                 return Err(AppError::bad_request("一時解除の時刻が不正です"));
             }
-            events::insert_unlock(&state.pool, &user.id, device_id, &reason, started_at, until).await?;
-            emit(state, &user.id, Some(device_id), EventKind::TempUnlock, &reason).await?;
-            state.hub.refresh_policy(&user.id);
+            // 届いたか分からないため再送されることがある。同じ解除は一度だけ通知する
+            if events::insert_unlock(&state.pool, &user.id, device_id, &reason, started_at, until).await? {
+                emit(state, &user.id, Some(device_id), EventKind::TempUnlock, &reason).await?;
+                state.hub.refresh_policy(&user.id);
+            }
             Ok(vec![])
         }
         DeviceMsg::Report { kind, message } => {

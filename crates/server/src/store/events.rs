@@ -104,6 +104,7 @@ pub async fn list(
     Ok(rows.into_iter().filter_map(EventRow::into_event).collect())
 }
 
+/// 一時解除を記録する。同じ解除（デバイス + 開始時刻）の再送なら何もせず `false`。
 pub async fn insert_unlock(
     pool: &SqlitePool,
     user_id: &str,
@@ -111,17 +112,20 @@ pub async fn insert_unlock(
     reason: &str,
     started_at: Ms,
     until: Ms,
-) -> Result<(), sqlx::Error> {
-    sqlx::query("INSERT INTO unlocks (id, user_id, device_id, reason, started_at, until) VALUES (?, ?, ?, ?, ?, ?)")
-        .bind(new_id())
-        .bind(user_id)
-        .bind(device_id)
-        .bind(reason)
-        .bind(started_at)
-        .bind(until)
-        .execute(pool)
-        .await?;
-    Ok(())
+) -> Result<bool, sqlx::Error> {
+    let r = sqlx::query(
+        "INSERT INTO unlocks (id, user_id, device_id, reason, started_at, until) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(device_id, started_at) DO NOTHING",
+    )
+    .bind(new_id())
+    .bind(user_id)
+    .bind(device_id)
+    .bind(reason)
+    .bind(started_at)
+    .bind(until)
+    .execute(pool)
+    .await?;
+    Ok(r.rows_affected() > 0)
 }
 
 /// （今の一時解除の終わり or 0、直近に終わった一時解除の終わり or 0）。

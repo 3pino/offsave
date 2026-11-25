@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="offsave_guard_label">offsave</string>
+    <string name="offsave_guard_description">友達と決めた利用時間の制限を守るために、前面で使っているアプリの名前を読み取り、制限に達したら画面を覆います。画面の内容（文字や入力）は記録せず、友達に共有するのは、使ったアプリの名前と時間、制限の解除・無効化の操作だけです。</string>
+</resources>

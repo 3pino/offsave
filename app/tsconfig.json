@@ -5,7 +5,7 @@
     "useDefineForClassFields": true,
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["svelte", "vite/client"],
+    "types": ["svelte", "vite/client", "node"],
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
