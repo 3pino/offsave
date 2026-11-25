@@ -350,6 +350,58 @@ async fn unlock_notifies_friend_with_reason_and_updates_policy() {
 }
 
 #[tokio::test]
+async fn resent_unlock_is_notified_only_once() {
+    let s = DevServer::start().await;
+    let (alice, bob) = (Client::new(&s, "alice@t"), Client::new(&s, "bob@t"));
+    make_friends(&alice, &bob).await;
+    let mut phone = alice.device("phone").await;
+    phone.heartbeat(protected()).await;
+
+    // 届いたか分からないため、デバイスは同じ解除を再送する
+    let now = now_ms();
+    let unlock = DeviceMsg::Unlock {
+        reason: "調べ物".into(),
+        started_at: now,
+        until: now + 15 * 60_000,
+    };
+    phone.send(&unlock).await;
+    phone.send(&unlock).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    let events: Vec<Event> = serde_json::from_value(bob.get("/events").await.1).unwrap();
+    assert_eq!(events.iter().filter(|e| e.kind == EventKind::TempUnlock).count(), 1);
+}
+
+#[tokio::test]
+async fn client_reports_unsupported_browser_and_clock_skew() {
+    let s = DevServer::start().await;
+    let (alice, bob) = (Client::new(&s, "alice@t"), Client::new(&s, "bob@t"));
+    make_friends(&alice, &bob).await;
+    let mut phone = alice.device("phone").await;
+    phone.heartbeat(protected()).await;
+    phone
+        .send(&DeviceMsg::Report {
+            kind: EventKind::UnsupportedBrowser,
+            message: "対応していないブラウザ「X」".into(),
+        })
+        .await;
+    phone
+        .send(&DeviceMsg::Report { kind: EventKind::ClockSkew, message: "時計が 10 分ずれています".into() })
+        .await;
+    // デバイスから送れない種類（友達になりすました通知）は拒否する
+    phone
+        .send(&DeviceMsg::Report { kind: EventKind::DeviceOnline, message: "x".into() })
+        .await;
+    assert!(matches!(phone.recv().await, ServerMsg::Event { .. } | ServerMsg::Error { .. }));
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    let events: Vec<Event> = serde_json::from_value(bob.get("/events").await.1).unwrap();
+    assert!(events.iter().any(|e| e.kind == EventKind::UnsupportedBrowser));
+    assert!(events.iter().any(|e| e.kind == EventKind::ClockSkew));
+    assert!(!events.iter().any(|e| e.kind == EventKind::DeviceOnline && e.message == "x"));
+}
+
+#[tokio::test]
 async fn silent_device_is_reported_then_recovers() {
     let s = DevServer::start().await;
     let (alice, bob) = (Client::new(&s, "alice@t"), Client::new(&s, "bob@t"));

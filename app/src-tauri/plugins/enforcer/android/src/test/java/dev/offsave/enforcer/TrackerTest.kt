@@ -80,6 +80,44 @@ class TrackerTest {
     assertTrue(tr.beginUploadUnlocks().isEmpty())
   }
 
+  private fun domainPolicy(seconds: Long) = """
+    {"server_time": $t0, "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
+     "rules": [{"id": "d", "name": "動画", "targets": [{"label": "yt", "keys": ["domain:example.com"]}],
+                "limit": {"type": "daily_total", "seconds": $seconds}, "enabled": true}],
+     "overrides": [], "unlock_until": 0, "last_unlock_end": 0, "unlock_minutes": 15, "others": []}
+  """.trimIndent()
+
+  @Test
+  fun siteInBrowserIsTrackedAndLimitedSeparatelyFromTheApp() {
+    val tr = Tracker(MemoryStore())
+    tr.applyPolicy(domainPolicy(seconds = 30))
+    tr.onForeground("android:browser", t0)
+    assertEquals(Verdict.Allow, tr.decide(t0 + 1000).verdict)
+    tr.onDomain("example.com", t0 + 1000)
+    assertEquals("domain:example.com", tr.foregroundKey)
+    assertEquals(Verdict.Allow, tr.decide(t0 + 20_000).verdict)
+    val d = tr.decide(t0 + 40_000)
+    assertTrue(d.verdict is Verdict.Grace)
+    // 猺予の対象はサイト（友達への通知で「どのサイトか」を伝える）
+    assertEquals(listOf("domain:example.com"), tr.graceSubjects.values.toList())
+    // サイトを離れれば、区間が記録され、判定は Allow に戻る
+    tr.onDomain(null, t0 + 50_000)
+    assertEquals(Verdict.Allow, tr.decide(t0 + 51_000).verdict)
+    assertTrue(tr.beginUploadSegments().any { it.key == "domain:example.com" })
+  }
+
+  @Test
+  fun leavingTheBrowserClosesTheSiteToo() {
+    val tr = Tracker(MemoryStore())
+    tr.applyPolicy(domainPolicy(seconds = 600))
+    tr.onForeground("android:browser", t0)
+    tr.onDomain("example.com", t0)
+    tr.onForeground("android:other", t0 + 10_000)
+    assertEquals("android:other", tr.foregroundKey)
+    val keys = tr.beginUploadSegments().map { it.key }
+    assertTrue(keys.contains("domain:example.com") && keys.contains("android:browser"))
+  }
+
   @Test
   fun screenOffStopsCounting() {
     val tr = Tracker(MemoryStore())

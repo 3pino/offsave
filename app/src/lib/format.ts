@@ -61,10 +61,20 @@ export const EVENT_LABEL: Record<EventKind, string> = {
   friend_removed: '友達を解消しました',
   settings_changed: '設定を変更しました',
   rule_changed: 'ルールが変わりました',
+  unsupported_browser: '対応していないブラウザを使いました',
+  clock_skew: '時計がずれています',
 };
 
 /** 警告として強調するイベント */
-export const ALERT_KINDS: EventKind[] = ['temp_unlock', 'device_offline', 'protection_disabled', 'tamper_attempt', 'device_removed'];
+export const ALERT_KINDS: EventKind[] = [
+  'temp_unlock',
+  'device_offline',
+  'protection_disabled',
+  'tamper_attempt',
+  'device_removed',
+  'unsupported_browser',
+  'clock_skew',
+];
 
 /** 論理日の日付に日数を足す（`YYYY-MM-DD`） */
 export function addDays(date: string, n: number): string {

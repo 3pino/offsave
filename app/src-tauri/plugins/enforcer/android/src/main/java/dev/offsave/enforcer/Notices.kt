@@ -67,6 +67,8 @@ object Notices {
     "friend_removed" -> "友達を解消しました"
     "settings_changed" -> "設定を変更しました"
     "rule_changed" -> "ルールが変わりました"
+    "unsupported_browser" -> "対応していないブラウザを使いました"
+    "clock_skew" -> "時計がずれています"
     else -> kind
   }
 

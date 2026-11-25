@@ -3,9 +3,13 @@ package dev.offsave.enforcer
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.view.inputmethod.InputMethodManager
 import org.json.JSONObject
 
@@ -39,6 +43,18 @@ class Agent private constructor(context: Context) {
   @Volatile var guard: GuardService? = null
   private var overlay: Overlay? = null
   private var imePackages: Set<String>? = null
+
+  // ---- 時計 ----
+  // サーバーの時刻を基準にし、端末を再起動しない限り経過時間（elapsedRealtime）で進める。
+  // 端末の時計を動かして日付をごまかすのを防ぎ、オフラインでも横ばいになる。
+  @Volatile private var anchorServer = 0L
+  @Volatile private var anchorElapsed = 0L
+  private var lastSkewReport = 0L
+
+  fun now(): Long {
+    val e = SystemClock.elapsedRealtime()
+    return if (anchorServer > 0 && e >= anchorElapsed) anchorServer + (e - anchorElapsed) else System.currentTimeMillis()
+  }
 
   data class Flags(val accessibility: Boolean, val deviceAdmin: Boolean, val batteryUnrestricted: Boolean)
 
@@ -108,8 +124,34 @@ class Agent private constructor(context: Context) {
 
   /** 前面が変わった。画面オフは null。 */
   fun onForeground(pkg: String?) {
-    tracker.onForeground(pkg?.let { "android:$it" }, System.currentTimeMillis())
+    tracker.onForeground(pkg?.let { "android:$it" }, now())
+    guard?.watchBrowser(pkg?.takeIf { Browsers.supported(it) })
+    if (pkg != null) checkUnsupportedBrowser(pkg)
     reevaluate()
+  }
+
+  /** ブラウザで見ているサイトが変わった（ホスト名だけ）。 */
+  fun onDomain(host: String?) {
+    tracker.onDomain(host, now())
+    reevaluate()
+  }
+
+  // ---- 対応していないブラウザ ----
+
+  private val browserPackages: Set<String> by lazy {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("http://example.com")).addCategory(Intent.CATEGORY_BROWSABLE)
+    context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_ALL)
+      .map { it.activityInfo.packageName }.toSet()
+  }
+  private val unsupportedReportedAt = HashMap<String, Long>()
+
+  /** URL を読めないブラウザは、サイトの制限が効かないので、友達に知らせる（同じブラウザは 1 時間に 1 回）。 */
+  private fun checkUnsupportedBrowser(pkg: String) {
+    if (Browsers.supported(pkg) || pkg !in browserPackages || pkg == context.packageName) return
+    val t = SystemClock.elapsedRealtime()
+    if (t - (unsupportedReportedAt[pkg] ?: -3_600_000L) < 3_600_000L) return
+    unsupportedReportedAt[pkg] = t
+    link.report("unsupported_browser", "対応していないブラウザ「${appLabel(pkg)}」を使いました（サイトの制限は効きません）")
   }
 
   fun onScreenOff() = onForeground(null)
@@ -130,14 +172,20 @@ class Agent private constructor(context: Context) {
 
   private fun doEvaluate() {
     main.removeCallbacks(wake)
-    val now = System.currentTimeMillis()
+    val now = now()
     val d = tracker.decide(now)
 
+    // 制限に達したとき、どのアプリ・サイトかを友達に伝える
     for ((graceKey, _) in d.newGraces) {
       val ruleId = graceKey.substringBefore('|')
       val name = tracker.ruleName(ruleId) ?: "制限"
-      val app = tracker.currentKey?.removePrefix("android:")?.let(::appLabel) ?: ""
-      link.report("limit_reached", "「$name」の制限に達しました（$app）")
+      val subject = tracker.graceSubjects[graceKey] ?: tracker.foregroundKey ?: ""
+      val what = when {
+        subject.startsWith("domain:") -> subject.removePrefix("domain:")
+        subject.startsWith("android:") -> appLabel(subject.removePrefix("android:"))
+        else -> subject
+      }
+      link.report("limit_reached", "「$name」の制限に達しました（$what）")
     }
 
     val ruleName = when (val v = d.verdict) {
@@ -149,7 +197,20 @@ class Agent private constructor(context: Context) {
     d.nextWakeup?.let { main.postDelayed(wake, maxOf(500L, it - now + 50)) }
   }
 
-  fun onPolicy() = reevaluate()
+  fun onPolicy() {
+    tracker.policy?.serverTime?.let { server ->
+      val skew = System.currentTimeMillis() - server
+      anchorServer = server
+      anchorElapsed = SystemClock.elapsedRealtime()
+      val t = SystemClock.elapsedRealtime()
+      if (kotlin.math.abs(skew) > 3 * MIN_MS && t - lastSkewReport > 30 * MIN_MS) {
+        lastSkewReport = t
+        val min = skew / MIN_MS
+        link.report("clock_skew", "デバイスの時計がサーバーより ${if (min >= 0) "" else "-"}${kotlin.math.abs(min)} 分ずれています（制限はサーバーの時刻で数えています）")
+      }
+    }
+    reevaluate()
+  }
 
   fun appLabel(pkg: String): String = try {
     val pm = context.packageManager
@@ -162,7 +223,7 @@ class Agent private constructor(context: Context) {
 
   /** 本人が一時解除した。`reason` は友達への通知の本文になる。 */
   fun unlock(reason: String) {
-    tracker.startUnlock(reason.trim(), System.currentTimeMillis())
+    tracker.startUnlock(reason.trim(), now())
     link.unlockNow()
     reevaluate()
   }

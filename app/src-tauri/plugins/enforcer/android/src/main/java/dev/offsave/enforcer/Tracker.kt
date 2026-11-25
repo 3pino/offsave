@@ -38,13 +38,23 @@ class Tracker(private val store: StateStore) {
   private var localUnlockMax = 0L
   private val pendingUnlocks = ArrayList<PendingUnlock>()
   private var open: Open? = null
+
+  /** ブラウザで見ているサイト（`domain:example.com`）。アプリの区間と並行して記録する。 */
+  private var openDomain: Open? = null
   private var inflightSegments = 0
   private var inflightUnlocks = 0
   var lastEventId: String? = null
     private set
 
-  /** いま前面のもの（画面オフ・不明は null）。 */
+  /** いま前面のアプリ（画面オフ・不明は null）。 */
   val currentKey: String? get() = open?.key
+
+  /** 友達に見せる「いま」。ブラウザでサイトを見ていれば、サイト。 */
+  val foregroundKey: String? get() = openDomain?.key ?: open?.key
+
+  /** 直前の判定で新しく始まった猺予のキー → 制限に当たったもの（アプリかサイトのキー）。 */
+  @Volatile var graceSubjects: Map<String, String> = emptyMap()
+    private set
 
   init {
     load()
@@ -120,12 +130,29 @@ class Tracker(private val store: StateStore) {
   fun onForeground(key: String?, now: Long) {
     if (open?.key == key) return
     closeOpen(now)
+    closeDomain(now)
     open = key?.let { Open(it, now) }
+  }
+
+  /** ブラウザで見ているサイトが変わった（ホスト名だけ。パスやクエリは渡さない）。サイトを見ていないときは null。 */
+  @Synchronized
+  fun onDomain(host: String?, now: Long) {
+    val key = host?.let { "domain:$it" }
+    if (openDomain?.key == key) return
+    closeDomain(now)
+    // アプリが前面に無いときは記録しない
+    openDomain = if (open != null) key?.let { Open(it, now) } else null
   }
 
   private fun closeOpen(now: Long) {
     val o = open ?: return
     if (now > o.start) addSegment(Segment(o.key, o.start, now))
+  }
+
+  private fun closeDomain(now: Long) {
+    val o = openDomain ?: return
+    if (now > o.start) addSegment(Segment(o.key, o.start, now))
+    openDomain = null
   }
 
   private fun addSegment(s: Segment) {
@@ -136,10 +163,17 @@ class Tracker(private val store: StateStore) {
   /** 続いている区間をここで区切って、未送信の一覧に入れる（ハートビートのたびに呼ぶ）。 */
   @Synchronized
   fun cut(now: Long) {
-    val o = open ?: return
-    if (now > o.start) {
-      addSegment(Segment(o.key, o.start, now))
-      open = Open(o.key, now)
+    open?.let { o ->
+      if (now > o.start) {
+        addSegment(Segment(o.key, o.start, now))
+        open = Open(o.key, now)
+      }
+    }
+    openDomain?.let { o ->
+      if (now > o.start) {
+        addSegment(Segment(o.key, o.start, now))
+        openDomain = Open(o.key, now)
+      }
     }
   }
 
@@ -200,30 +234,48 @@ class Tracker(private val store: StateStore) {
   @Synchronized
   fun decide(now: Long): Decision {
     val p = policy ?: return Decision(Verdict.Allow, emptyList(), null)
-    val all = ArrayList<Segment>(p.others.size + segments.size + 1)
+    val all = ArrayList<Segment>(p.others.size + segments.size + 2)
     all.addAll(p.others)
     all.addAll(segments)
     open?.let { all.add(Segment(it.key, it.start, now)) }
+    openDomain?.let { all.add(Segment(it.key, it.start, now)) }
     val lastEnd = maxOf(p.lastUnlockEnd, if (localUnlockMax <= now) localUnlockMax else 0)
     val unlock = unlockUntil(now)
-    val d = decide(
-      EngineInput(
-        rules = p.rules,
-        overrides = p.overrides,
-        unlockUntil = unlock,
-        lastUnlockEnd = lastEnd,
-        segments = all,
-        graces = graces,
-        now = now,
-        clock = p.clock,
-        currentKey = open?.key,
-      ),
-    )
+
+    // アプリとサイトの両方を判定して、一番厳しい結果にする
+    val subjects = HashMap<String, String>()
+    val results = listOfNotNull(open?.key, openDomain?.key).map { key ->
+      decide(
+        EngineInput(
+          rules = p.rules,
+          overrides = p.overrides,
+          unlockUntil = unlock,
+          lastUnlockEnd = lastEnd,
+          segments = all,
+          graces = graces,
+          now = now,
+          clock = p.clock,
+          currentKey = key,
+        ),
+      ).also { d -> d.newGraces.forEach { subjects[it.first] = key } }
+    }
+    val d = combine(results)
+    graceSubjects = subjects
     if (d.newGraces.isNotEmpty()) {
       d.newGraces.forEach { graces[it.first] = it.second }
       persist()
     }
     return d
+  }
+
+  /** Block > Grace（終わりが早い方）> Allow。新しい猺予と次の確認の時刻はまとめる。 */
+  private fun combine(ds: List<Decision>): Decision {
+    if (ds.isEmpty()) return Decision(Verdict.Allow, emptyList(), null)
+    val block = ds.firstNotNullOfOrNull { it.verdict as? Verdict.Block }
+    val grace = ds.mapNotNull { it.verdict as? Verdict.Grace }.minByOrNull { it.until }
+    val verdict: Verdict = block ?: grace ?: Verdict.Allow
+    val newGraces = ds.flatMap { it.newGraces }.distinctBy { it.first }
+    return Decision(verdict, newGraces, ds.mapNotNull { it.nextWakeup }.minOrNull())
   }
 
   /** ルール名（オーバーレイの表示用）。 */

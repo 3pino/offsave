@@ -74,7 +74,7 @@ class EnforcerPlugin(private val activity: Activity) : Plugin(activity) {
   private fun statusObject(): JSObject {
     val a = agent
     val f = a.flags()
-    val now = System.currentTimeMillis()
+    val now = a.now()
     val o = JSObject()
     o.put("configured", a.prefs.configured)
     o.put("accessibility", f.accessibility)
@@ -90,7 +90,7 @@ class EnforcerPlugin(private val activity: Activity) : Plugin(activity) {
     o.put("lastError", a.link.lastError ?: JSONObject.NULL)
     o.put("lastPolicyAt", a.link.lastPolicyAt)
     o.put("unlockUntil", a.tracker.unlockUntil(now))
-    o.put("foreground", a.tracker.currentKey ?: JSONObject.NULL)
+    o.put("foreground", a.tracker.foregroundKey ?: JSONObject.NULL)
     o.put("ruleCount", a.tracker.policy?.rules?.size ?: 0)
     return o
   }

@@ -13,6 +13,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -61,7 +62,7 @@ class Overlay(private val service: AccessibilityService, private val agent: Agen
   private val bannerTick = object : Runnable {
     override fun run() {
       val b = banner ?: return
-      val left = ((bannerUntil - System.currentTimeMillis() + 999) / 1000).coerceAtLeast(0)
+      val left = ((bannerUntil - agent.now() + 999) / 1000).coerceAtLeast(0)
       b.text = "「$bannerRule」の制限に達しました。あと ${left} 秒で使えなくなります"
       main.postDelayed(this, 1000)
     }
@@ -162,7 +163,7 @@ private class BlockView(
   }
 
   init {
-    setBackgroundColor(0xFA101418.toInt())
+    setBackgroundColor(0xFF101418.toInt())
     isFocusableInTouchMode = true
     addView(
       ScrollView(context).apply {
@@ -230,6 +231,9 @@ private class BlockView(
   private fun reset(vararg views: View) {
     countdown?.let { main.removeCallbacks(it) }
     countdown = null
+    // 入力欄が無くなる段階では、キーボードを閉じる
+    (context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
+      .hideSoftInputFromWindow(windowToken, 0)
     content.removeAllViews()
     views.forEach { content.addView(it) }
   }

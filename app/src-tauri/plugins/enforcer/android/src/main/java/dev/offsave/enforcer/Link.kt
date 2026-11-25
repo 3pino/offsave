@@ -150,7 +150,7 @@ class Link(private val agent: Agent) {
 
   private fun sendHeartbeat() {
     val ws = socket ?: return
-    val now = System.currentTimeMillis()
+    val now = agent.now()
     val tracker = agent.tracker
     tracker.cut(now)
 
@@ -180,7 +180,7 @@ class Link(private val agent: Agent) {
             .put("device_admin", flags.deviceAdmin)
             .put("battery_unrestricted", flags.batteryUnrestricted),
         )
-        .put("foreground", tracker.currentKey ?: JSONObject.NULL)
+        .put("foreground", tracker.foregroundKey ?: JSONObject.NULL)
         .put("app_version", agent.appVersion)
         .put("last_event_id", tracker.lastEventId ?: JSONObject.NULL)
         .toString(),

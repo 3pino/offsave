@@ -63,6 +63,13 @@ pub struct UsageItem {
     pub seconds: u32,
 }
 
+/// 識別子の表示名（例: `android:com.example.game` → 「ゲーム」）。デバイスが送る。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeyLabel {
+    pub key: String,
+    pub label: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserStatus {
     pub user: User,
@@ -74,6 +81,9 @@ pub struct UserStatus {
     /// 今日（論理日）の日付。
     pub date: String,
     pub usage_today: Vec<UsageItem>,
+    /// 利用したアプリの表示名。
+    #[serde(default)]
+    pub labels: Vec<KeyLabel>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,6 +124,10 @@ pub enum EventKind {
     SettingsChanged,
     /// 友達がルールやオーバーライドを変えた。
     RuleChanged,
+    /// 対応していないブラウザを使った（URL を見られないので、サイトの制限が効かない）。
+    UnsupportedBrowser,
+    /// デバイスの時計がサーバーと大きくずれている。
+    ClockSkew,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -155,8 +169,12 @@ pub enum DeviceMsg {
         /// 最後に受け取ったイベントの ID（これより新しいものを送り直す）。
         last_event_id: Option<String>,
     },
-    /// 終わった区間（まだ続いている区間は、送った時点で区切る）。
-    Usage { segments: Vec<Segment> },
+    /// 終わった区間（まだ続いている区間は、送った時点で区切る）。`labels` は、初めて送るアプリの表示名。
+    Usage {
+        segments: Vec<Segment>,
+        #[serde(default)]
+        labels: Vec<KeyLabel>,
+    },
     /// 本人の一時解除。`reason` が友達への通知の本文になる。
     Unlock {
         reason: String,

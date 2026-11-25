@@ -174,7 +174,7 @@ async fn handle(
             out.push(ServerMsg::Policy(build_policy(state, &user, device_id, now).await?));
             Ok(out)
         }
-        DeviceMsg::Usage { segments } => {
+        DeviceMsg::Usage { segments, labels } => {
             if segments.len() > MAX_SEGMENTS {
                 return Err(AppError::bad_request("区間が多すぎます"));
             }
@@ -189,6 +189,14 @@ async fn handle(
                 })
                 .collect();
             usage::insert_segments(&state.pool, device_id, &user.id, &valid).await?;
+            let labels: Vec<_> = labels
+                .into_iter()
+                .filter(|l| valid_key(&l.key) && !l.label.trim().is_empty() && l.label.chars().count() <= 80)
+                .take(200)
+                .collect();
+            if !labels.is_empty() {
+                usage::upsert_labels(&state.pool, &user.id, &labels).await?;
+            }
             Ok(vec![])
         }
         DeviceMsg::Unlock {
@@ -218,7 +226,11 @@ async fn handle(
         DeviceMsg::Report { kind, message } => {
             if !matches!(
                 kind,
-                EventKind::TamperAttempt | EventKind::LimitReached | EventKind::ProtectionDisabled
+                EventKind::TamperAttempt
+                    | EventKind::LimitReached
+                    | EventKind::ProtectionDisabled
+                    | EventKind::UnsupportedBrowser
+                    | EventKind::ClockSkew
             ) {
                 return Err(AppError::bad_request("このイベントは送れません"));
             }

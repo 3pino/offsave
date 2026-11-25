@@ -2,6 +2,8 @@ package dev.offsave.enforcer
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
@@ -14,6 +16,35 @@ import android.view.accessibility.AccessibilityNodeInfo
  */
 class GuardService : AccessibilityService() {
   private var lastTamperAt = 0L
+  private val main = Handler(Looper.getMainLooper())
+  private var watchedBrowser: String? = null
+
+  /** ブラウザが前面にある間だけ、数秒おきに URL バーのホスト名を読む（イベントの買い込みを避けて電池を節約）。 */
+  private val pollBrowser = object : Runnable {
+    override fun run() {
+      val pkg = watchedBrowser ?: return
+      readUrlBar(pkg)
+      main.postDelayed(this, BROWSER_POLL_MS)
+    }
+  }
+
+  /** 読むブラウザを変える。前面がブラウザでないときは null。 */
+  fun watchBrowser(pkg: String?) {
+    if (pkg == watchedBrowser) return
+    watchedBrowser = pkg
+    main.removeCallbacks(pollBrowser)
+    if (pkg != null) pollBrowser.run()
+  }
+
+  private fun readUrlBar(pkg: String) {
+    val root = rootInActiveWindow ?: return
+    // 自分のオーバーレイやキーボードがアクティブなときは読まない（直前のサイトをそのままにする）
+    if (root.packageName?.toString() != pkg) return
+    val id = Browsers.urlBarId(pkg) ?: return
+    val node = root.findAccessibilityNodeInfosByViewId(id).firstOrNull() ?: return // 全画面動画などでバーが無い間は、直前のサイトを続ける
+    if (node.isFocused) return // 入力中の文字は読まない
+    Agent.get(this).onDomain(Browsers.hostOf(node.text?.toString() ?: ""))
+  }
 
   override fun onServiceConnected() {
     val agent = Agent.get(this)
@@ -35,6 +66,7 @@ class GuardService : AccessibilityService() {
   override fun onInterrupt() {}
 
   override fun onUnbind(intent: Intent?): Boolean {
+    main.removeCallbacks(pollBrowser)
     Agent.get(this).detachGuard(this)
     return super.onUnbind(intent)
   }
@@ -73,6 +105,8 @@ class GuardService : AccessibilityService() {
   }
 
   companion object {
+    private const val BROWSER_POLL_MS = 2_000L
+
     private val SETTINGS_PACKAGES = setOf(
       "com.android.settings",
       "com.google.android.packageinstaller",

@@ -102,7 +102,9 @@ export type EventKind =
   | 'friend_added'
   | 'friend_removed'
   | 'settings_changed'
-  | 'rule_changed';
+  | 'rule_changed'
+  | 'unsupported_browser'
+  | 'clock_skew';
 
 export interface OffsaveEvent {
   id: string;
