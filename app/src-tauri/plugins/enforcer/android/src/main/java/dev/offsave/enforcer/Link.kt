@@ -44,6 +44,7 @@ class Link(private val agent: Agent) {
   private var backoff = 2_000L
   private var connecting = false
   private val pendingReports = ArrayList<JSONObject>()
+  private val sentLabels = HashSet<String>()
 
   private val tick = object : Runnable {
     override fun run() {
@@ -134,6 +135,7 @@ class Link(private val agent: Agent) {
     connected = false
     connecting = false
     lastError = why
+    sentLabels.clear() // 届いたか分からないので、つながったときにもう一度送る
     agent.tracker.onDisconnected()
     if (!running) return
     // 次のハートビートを待たずに、間隔を空けてつなぎ直す
@@ -163,9 +165,14 @@ class Link(private val agent: Agent) {
     }
     val segments = tracker.beginUploadSegments()
     if (segments.isNotEmpty()) {
+      // 初めて送るアプリの表示名を添える（友達の画面でパッケージ名の代わりに出す）
+      val labels = segments.map { it.key }.distinct()
+        .filter { it.startsWith("android:") && sentLabels.add(it) }
+        .map { JSONObject().put("key", it).put("label", agent.appLabel(it.removePrefix("android:"))) }
       ws.send(
         JSONObject().put("type", "usage")
-          .put("segments", JSONArray(segments.map(Wire::segmentJson))).toString(),
+          .put("segments", JSONArray(segments.map(Wire::segmentJson)))
+          .put("labels", JSONArray(labels)).toString(),
       )
     }
     for (r in pendingReports.toList()) ws.send(r.toString())

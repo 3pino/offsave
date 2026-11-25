@@ -117,8 +117,9 @@ class Agent private constructor(context: Context) {
   /** このパッケージの画面の変化を、前面の変化として扱うか。 */
   fun countsAsForeground(pkg: String): Boolean {
     if (pkg in IGNORED || pkg in imes()) return false
-    // 自分のオーバーレイが出ている間の、自分の画面の変化は前面ではない
-    if (pkg == context.packageName && overlay?.visible == true) return false
+    // オーバーレイを出し入れした直後の、自分の画面の変化は、オーバーレイ自身のものなので前面ではない。
+    // それ以外の自分のアプリ（offsave の画面）への切り替えは、普通のアプリとして扱う。
+    if (pkg == context.packageName && overlay?.changedRecently() == true) return false
     return true
   }
 

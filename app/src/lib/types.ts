@@ -71,6 +71,11 @@ export interface UsageItem {
   seconds: number;
 }
 
+export interface KeyLabel {
+  key: string;
+  label: string;
+}
+
 export interface UserStatus {
   user: User;
   settings: UserSettings;
@@ -80,6 +85,7 @@ export interface UserStatus {
   unlock_until: Ms;
   date: string;
   usage_today: UsageItem[];
+  labels: KeyLabel[];
 }
 
 export type FriendState = 'pending_in' | 'pending_out' | 'accepted';

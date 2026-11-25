@@ -7,6 +7,7 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.InputType
 import android.view.Gravity
 import android.view.KeyEvent
@@ -35,6 +36,11 @@ class Overlay(private val service: AccessibilityService, private val agent: Agen
   private var block: BlockView? = null
 
   val visible: Boolean get() = block != null || banner != null
+
+  private var lastChangeAt = 0L
+
+  /** 出し入れしてから、まだ間もないか。 */
+  fun changedRecently(): Boolean = SystemClock.elapsedRealtime() - lastChangeAt < 700
 
   fun apply(verdict: Verdict, ruleName: String?) {
     when (verdict) {
@@ -72,6 +78,7 @@ class Overlay(private val service: AccessibilityService, private val agent: Agen
     bannerUntil = until
     bannerRule = rule
     if (banner == null) {
+      lastChangeAt = SystemClock.elapsedRealtime()
       val tv = TextView(service).apply {
         setTextColor(Color.WHITE)
         textSize = 15f
@@ -104,7 +111,10 @@ class Overlay(private val service: AccessibilityService, private val agent: Agen
 
   private fun hideBanner() {
     main.removeCallbacks(bannerTick)
-    banner?.let { runCatching { wm.removeView(it) } }
+    banner?.let {
+      lastChangeAt = SystemClock.elapsedRealtime()
+      runCatching { wm.removeView(it) }
+    }
     banner = null
   }
 
@@ -115,6 +125,7 @@ class Overlay(private val service: AccessibilityService, private val agent: Agen
       it.setRule(rule)
       return
     }
+    lastChangeAt = SystemClock.elapsedRealtime()
     val v = BlockView(service, agent, rule)
     val lp = WindowManager.LayoutParams(
       ViewGroup.LayoutParams.MATCH_PARENT,
@@ -132,6 +143,7 @@ class Overlay(private val service: AccessibilityService, private val agent: Agen
 
   private fun hideBlock() {
     block?.let {
+      lastChangeAt = SystemClock.elapsedRealtime()
       it.dispose()
       runCatching { wm.removeView(it) }
     }

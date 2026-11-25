@@ -32,6 +32,8 @@
       ? Math.min(100, (r.used_seconds / r.rule.limit.seconds) * 100)
       : 0;
 
+  $effect(() => names.learn(status.labels));
+
   const tomorrow = $derived(addDays(status.date, 1));
   const unlocked = $derived(status.unlock_until > Date.now());
 </script>

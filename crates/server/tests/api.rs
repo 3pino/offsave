@@ -4,7 +4,8 @@ use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use offsave_core::protocol::{
-    DeviceFlags, DeviceMsg, Event, EventKind, Friend, FriendState, Policy, ServerMsg, UserStatus,
+    DeviceFlags, DeviceMsg, Event, EventKind, Friend, FriendState, KeyLabel, Policy, ServerMsg,
+    UserStatus,
 };
 use offsave_server::db::now_ms;
 use offsave_server::testing::DevServer;
@@ -280,17 +281,30 @@ async fn heartbeat_returns_policy_and_usage_is_aggregated_across_devices() {
         start,
         end,
     };
-    phone.send(&DeviceMsg::Usage { segments: vec![seg(now - 90_000, now - 30_000)] }).await;
-    tablet.send(&DeviceMsg::Usage { segments: vec![seg(now - 60_000, now)] }).await;
+    phone
+        .send(&DeviceMsg::Usage {
+            segments: vec![seg(now - 90_000, now - 30_000)],
+            labels: vec![
+                KeyLabel { key: "android:com.example.game".into(), label: "ゲーム".into() },
+                // 不正な識別子の名前は捨てられる
+                KeyLabel { key: "bad key".into(), label: "x".into() },
+            ],
+        })
+        .await;
+    tablet.send(&DeviceMsg::Usage { segments: vec![seg(now - 60_000, now)], labels: vec![] }).await;
     // 不正な区間（未来・長すぎ）は捨てられる
     tablet
-        .send(&DeviceMsg::Usage { segments: vec![seg(now + 3_600_000, now + 3_700_000)] })
+        .send(&DeviceMsg::Usage { segments: vec![seg(now + 3_600_000, now + 3_700_000)], labels: vec![] })
         .await;
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     let status = bob.status(&a_id).await;
     assert_eq!(status.rules[0].used_seconds, 90);
     assert_eq!(status.usage_today[0].seconds, 90);
+    assert_eq!(
+        status.labels,
+        vec![KeyLabel { key: "android:com.example.game".into(), label: "ゲーム".into() }]
+    );
     assert_eq!(status.devices.len(), 2);
     assert_eq!(status.devices[0].state, "online");
     assert!(status.devices[0].flags.protected());
@@ -472,6 +486,7 @@ async fn device_removal_is_reported_and_keeps_usage() {
                 start: now - 60_000,
                 end: now,
             }],
+            labels: vec![],
         })
         .await;
     tokio::time::sleep(Duration::from_millis(200)).await;

@@ -26,6 +26,41 @@ pub async fn insert_segments(
     tx.commit().await
 }
 
+pub async fn upsert_labels(
+    pool: &SqlitePool,
+    user_id: &str,
+    labels: &[offsave_core::protocol::KeyLabel],
+) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    for l in labels {
+        sqlx::query(
+            "INSERT INTO app_labels (user_id, key, label) VALUES (?, ?, ?)
+             ON CONFLICT(user_id, key) DO UPDATE SET label = excluded.label",
+        )
+        .bind(user_id)
+        .bind(&l.key)
+        .bind(&l.label)
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await
+}
+
+pub async fn labels_of_user(
+    pool: &SqlitePool,
+    user_id: &str,
+) -> Result<Vec<offsave_core::protocol::KeyLabel>, sqlx::Error> {
+    let rows: Vec<(String, String)> =
+        sqlx::query_as("SELECT key, label FROM app_labels WHERE user_id = ? ORDER BY key")
+            .bind(user_id)
+            .fetch_all(pool)
+            .await?;
+    Ok(rows
+        .into_iter()
+        .map(|(key, label)| offsave_core::protocol::KeyLabel { key, label })
+        .collect())
+}
+
 /// `[lo, hi)` に重なるユーザーの区間。`exclude_device` のものは除く。
 pub async fn segments_of_user(
     pool: &SqlitePool,

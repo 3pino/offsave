@@ -134,5 +134,6 @@ pub async fn user_status(state: &AppState, user: &UserRow, now: Ms) -> AppResult
         unlock_until,
         date: day.date,
         usage_today,
+        labels: usage::labels_of_user(&state.pool, &user.id).await?,
     })
 }
