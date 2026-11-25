@@ -1,0 +1,15 @@
+"$schema" = "schemas/schema.json"
+
+[default]
+description = "制限の強制サービスの設定と状態の確認を許可する"
+permissions = [
+  "allow-configure",
+  "allow-clear",
+  "allow-status",
+  "allow-open-accessibility-settings",
+  "allow-request-device-admin",
+  "allow-request-battery-exemption",
+  "allow-request-notifications",
+  "allow-open-app-details",
+  "allow-installed-apps",
+]

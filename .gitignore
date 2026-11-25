@@ -13,3 +13,19 @@ node_modules/
 *.keystore
 local.properties
 .gradle/
+
+# Android（tauri android init の生成物のうち、ビルドで作られるもの・環境依存のもの）
+/app/src-tauri/gen/android/.gradle/
+/app/src-tauri/gen/android/build/
+/app/src-tauri/gen/android/app/build/
+/app/src-tauri/gen/android/app/.tauri/
+/app/src-tauri/gen/android/app/src/main/jniLibs/
+/app/src-tauri/gen/android/app/src/main/assets/
+/app/src-tauri/gen/android/app/src/main/java/dev/offsave/app/generated/
+/app/src-tauri/gen/android/app/tauri.properties
+/app/src-tauri/gen/android/tauri.settings.gradle
+/app/src-tauri/gen/android/app/tauri.build.gradle.kts
+/app/src-tauri/gen/android/local.properties
+/app/src-tauri/plugins/*/android/.tauri/
+/app/src-tauri/plugins/*/android/.gradle/
+/app/src-tauri/plugins/*/android/build/

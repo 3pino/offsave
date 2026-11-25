@@ -1,0 +1,13 @@
+[package]
+name = "tauri-plugin-enforcer"
+version = "0.1.0"
+description = "Android で制限を強制し、利用時間を集計して、サーバーへハートビートを送る"
+edition = "2021"
+publish = false
+links = "tauri-plugin-enforcer"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

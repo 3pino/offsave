@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "android",
+  "description": "Android 版の強制サービス",
+  "platforms": ["android"],
+  "windows": ["main"],
+  "permissions": ["enforcer:default"]
+}

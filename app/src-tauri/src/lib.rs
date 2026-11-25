@@ -1,0 +1,11 @@
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let builder = tauri::Builder::default();
+
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(tauri_plugin_enforcer::init());
+
+    builder
+        .run(tauri::generate_context!())
+        .expect("offsave の起動に失敗しました");
+}
