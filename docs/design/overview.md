@@ -1,7 +1,7 @@
 # offsave 設計メモ(決定事項)
 
 友達同士で互いのスクリーンタイムを管理するツール。Windows / Linux / Android 対応。
-Tailscale(ノード共有)の上でだけ動き、[disnans](../../../disnans) と同じ土台を使う。
+Tailscale(ノード共有)の上でだけ動き、[disnans](https://github.com/3pino/disnans) と同じ土台を使う。
 
 状態の凡例: **決定** / **仮置き**(解釈を置いたもの。違えば直す) / **未決**
 
