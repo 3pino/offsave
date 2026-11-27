@@ -60,6 +60,8 @@ export class Api {
   updateSettings = (s: UserSettings) => this.req<UserSettings>('PUT', '/me/settings', s);
 
   friends = () => this.req<Friend[]>('GET', '/friends');
+  /** 友達にできる人（offsave を使っていて、まだ友達でも申請中でもない人） */
+  people = () => this.req<User[]>('GET', '/people');
   requestFriend = (login_name: string) => this.req<Friend>('POST', '/friends', { login_name });
   acceptFriend = (id: string) => this.req<Friend>('POST', `/friends/${id}/accept`, {});
   removeFriend = (id: string) => this.req<{ ok: boolean }>('DELETE', `/friends/${id}`);

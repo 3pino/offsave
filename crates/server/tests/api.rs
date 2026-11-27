@@ -562,6 +562,25 @@ async fn device_removal_is_reported_and_keeps_usage() {
 }
 
 #[tokio::test]
+async fn people_lists_users_who_are_not_yet_friends() {
+    let s = DevServer::start().await;
+    let (alice, bob, carol) = (Client::new(&s, "alice@t"), Client::new(&s, "bob@t"), Client::new(&s, "carol@t"));
+    let _ = carol.id().await;
+    make_friends(&alice, &bob).await;
+
+    let logins = |v: Value| -> Vec<String> {
+        v.as_array().unwrap().iter().map(|u| u["login_name"].as_str().unwrap().to_owned()).collect()
+    };
+    // alice: bob はもう友達なので出ない。自分も出ない
+    assert_eq!(logins(alice.get("/people").await.1), vec!["carol@t"]);
+    // carol からは、alice と bob が見える
+    assert_eq!(logins(carol.get("/people").await.1), vec!["alice@t", "bob@t"]);
+    // 申請中の人も出ない
+    assert_eq!(carol.post("/friends", json!({ "login_name": "alice@t" })).await.0, 200);
+    assert_eq!(logins(carol.get("/people").await.1), vec!["bob@t"]);
+}
+
+#[tokio::test]
 async fn a_friend_can_remove_a_device_but_a_stranger_cannot() {
     let s = DevServer::start().await;
     let (alice, bob, carol) = (Client::new(&s, "alice@t"), Client::new(&s, "bob@t"), Client::new(&s, "carol@t"));

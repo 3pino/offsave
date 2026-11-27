@@ -5,14 +5,15 @@
   import { errorText } from '../lib/errors';
   import { session } from '../lib/session.svelte';
   import { ui } from '../lib/ui.svelte';
-  import type { Friend } from '../lib/types';
+  import type { Friend, User } from '../lib/types';
   import FriendDetail from './FriendDetail.svelte';
   import Page from './Page.svelte';
 
   const api = $derived(session.api!);
 
   let friends = $state<Friend[]>([]);
-  let login = $state('');
+  let people = $state.raw<User[]>([]);
+  let query = $state('');
   let open = $state<Friend | null>(null);
 
   // 戻る操作（Android の戻る）で、友達の詳細を閉じる
@@ -23,7 +24,7 @@
 
   async function refresh() {
     try {
-      friends = await api.friends();
+      [friends, people] = await Promise.all([api.friends(), api.people()]);
     } catch (e) {
       ui.toast(errorText(e), 'error');
     }
@@ -44,11 +45,13 @@
     await refresh();
   }
 
-  const request = () =>
-    act(async () => {
-      await api.requestFriend(login.trim());
-      login = '';
-    });
+  // 候補（offsave を使っている人）を、名前やログイン名で絞り込む
+  const q = $derived(query.trim().toLowerCase());
+  const matches = $derived(
+    (q ? people.filter((p) => (p.display_name + ' ' + p.login_name).toLowerCase().includes(q)) : people).slice(0, 20),
+  );
+
+  const request = (p: User) => act(() => api.requestFriend(p.login_name));
 </script>
 
 {#if open}
@@ -60,7 +63,7 @@
     }}
   />
 {:else}
-  <Page title="友達">
+  <Page title="友達" header={false}>
     <section class="friends-block">
       {#each friends as f (f.user.id)}
         <div class="card">
@@ -87,16 +90,15 @@
 
     <section class="friends-block">
       <h2 class="block-title">友達を追加</h2>
-      <div class="card">
-        <label class="field">
-          <span class="field-label">相手の Tailscale のログイン名</span>
-          <div class="row">
-            <div class="grow"><TextInput bind:value={login} placeholder="bob@example.com" autocapitalize="off" /></div>
-            <Button variant="primary" disabled={!login.trim()} onclick={request}>申請</Button>
-          </div>
-        </label>
-        <p class="muted small">相手が先に offsave を開いて接続している必要があります。</p>
-      </div>
+      <TextInput bind:value={query} placeholder="名前やログイン名で探す" autocapitalize="off" />
+      {#each matches as p (p.id)}
+        <div class="row">
+          <span class="grow">{p.display_name} <span class="muted small">{p.login_name}</span></span>
+          <Button variant="primary" onclick={() => request(p)}>申請</Button>
+        </div>
+      {:else}
+        <p class="empty">{q ? '見つかりません。相手が先に offsave を開いて接続している必要があります。' : '申請できる人はいません。相手が先に offsave を開いて接続している必要があります。'}</p>
+      {/each}
     </section>
   </Page>
 {/if}

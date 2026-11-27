@@ -1,24 +1,10 @@
 import { getItem, setItem } from '@3pino/app-kit-web/core/storage';
 
 /**
- * 「今日の利用」に出さないもの（既定は、ホーム画面のアプリ・offsave 自身など、見ても意味のないもの）。
+ * 「今日の利用」で、初めは隠すアプリ・サイト（設定の「非表示のアプリ」）。既定は無し。
  * 表示だけの設定で、記録・制限には関係しない。このデバイスの画面だけの設定（友達の画面には影響しない）。
+ * 隠したものも、「続きを表示」で見られる。
  */
-export const DEFAULT_HIDDEN: string[] = [
-  'android:dev.offsave.app',
-  'android:com.android.systemui',
-  'android:com.android.launcher3',
-  'android:com.google.android.apps.nexuslauncher',
-  'android:com.sec.android.app.launcher',
-  'android:com.miui.home',
-  'android:com.oppo.launcher',
-  'android:com.huawei.android.launcher',
-  'android:com.motorola.launcher3',
-  'android:com.sonymobile.home',
-  'android:net.oneplus.launcher',
-  'android:com.nothing.launcher',
-];
-
 const KEY = 'offsave.hiddenUsage';
 
 function load(): string[] {
@@ -29,9 +15,9 @@ function load(): string[] {
       if (Array.isArray(parsed) && parsed.every((k) => typeof k === 'string')) return parsed;
     }
   } catch {
-    /* 既定に戻す */
+    /* 無いものとして扱う */
   }
-  return [...DEFAULT_HIDDEN];
+  return [];
 }
 
 class Hidden {
@@ -50,10 +36,6 @@ class Hidden {
 
   remove(key: string) {
     this.set(this.keys.filter((k) => k !== key));
-  }
-
-  reset() {
-    this.set([...DEFAULT_HIDDEN]);
   }
 }
 

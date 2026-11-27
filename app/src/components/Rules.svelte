@@ -128,7 +128,6 @@
     {:else}
       <div class="muted small">今日 {duration(rs.used_seconds)} 使用</div>
     {/if}
-    <div class="muted small">決めた人: {rs.author.display_name}</div>
   </div>
 {/snippet}
 
@@ -141,7 +140,7 @@
     oncancel={() => (editing = null)}
   />
 {:else}
-  <Page title="ルール">
+  <Page title="ルール" header={false}>
     {#each ordered as person (person.user.id)}
       {@const status = person.status}
       <section class="person">

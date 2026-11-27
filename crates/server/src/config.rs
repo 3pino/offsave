@@ -15,7 +15,7 @@ pub struct Config {
     pub tailscale_socket: PathBuf,
     /// 新しいユーザーのタイムゾーンの既定（`OFFSAVE_DEFAULT_TZ`）。
     pub default_timezone: String,
-    /// ハートビートがこの時間（ミリ秒）途絶えたら「疑い」にする（`OFFSAVE_SUSPECT_AFTER_SECS`、既定 180 秒）。
+    /// ハートビートがこの時間（ミリ秒）途絶えたら「疑い」にする（`OFFSAVE_SUSPECT_AFTER_SECS`、既定 600 秒）。
     pub suspect_after_ms: i64,
     /// 一時解除の長さ（分）。
     pub unlock_minutes: u32,
@@ -35,7 +35,7 @@ impl Config {
                 .ok()
                 .filter(|n| *n >= 1)
                 .ok_or_else(|| format!("OFFSAVE_SUSPECT_AFTER_SECS が不正です（{v}）"))?,
-            None => 180,
+            None => 600,
         };
 
         Ok(Self {

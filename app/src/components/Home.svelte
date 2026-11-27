@@ -31,7 +31,7 @@
   const ns = $derived(protection.ns);
 </script>
 
-<Page title="{saved.userName} さん">
+<Page title="{saved.userName} さん" header={false}>
   {#if ns && protection.incomplete}
     <div class="card card-warn">
       <div>このデバイスの保護が、まだ完全ではありません。</div>

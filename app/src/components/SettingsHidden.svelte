@@ -34,13 +34,8 @@
   });
 </script>
 
-<Page title="今日の利用の表示" {onback}>
-  <p class="muted small hidden-note">
-    ホーム画面のアプリ・offsave 自身のように、見ても意味のないものを、「今日の利用」に出さないようにします。記録と制限には影響しません。この設定は、このデバイスの画面だけに効きます。
-  </p>
-
+<Page title="非表示のアプリ" {onback}>
   <section class="hidden-block">
-    <h2 class="block-title">出さないもの</h2>
     {#each hidden.keys as key (key)}
       <div class="row hidden-row">
         <KeyIcon {key} size={28} />
@@ -48,18 +43,17 @@
         <button type="button" class="hidden-x" aria-label="{names.label(key)} を出すようにする" onclick={() => hidden.remove(key)}><X size={16} /></button>
       </div>
     {:else}
-      <p class="empty">ありません。</p>
+      <p class="empty">まだありません。</p>
     {/each}
     <div class="row row-wrap">
       <Button icon={Plus} onclick={() => (picking = true)}>追加</Button>
-      <Button onclick={() => hidden.reset()}>初期設定に戻す</Button>
     </div>
   </section>
 </Page>
 
 {#if picking}
   <TargetPicker
-    title="出さないものを追加"
+    title="非表示にするアプリ"
     {candidates}
     picked={hidden.has}
     onpick={(key) => hidden.add(key)}
@@ -69,9 +63,6 @@
 {/if}
 
 <style>
-  .hidden-note {
-    margin: 0;
-  }
   .hidden-block {
     display: flex;
     flex-direction: column;

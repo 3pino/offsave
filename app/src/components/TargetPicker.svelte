@@ -39,7 +39,10 @@
   const collator = new Intl.Collator('ja');
   const sorted = $derived([...candidates].sort((a, b) => collator.compare(a.label, b.label)));
   const q = $derived(search.trim().toLowerCase());
-  const visible = $derived(q ? sorted.filter((c) => (c.label + ' ' + c.key).toLowerCase().includes(q)) : sorted);
+  const matched = $derived(q ? sorted.filter((c) => (c.label + ' ' + c.key).toLowerCase().includes(q)) : sorted);
+  // 一度に描く行数を限る（数百件をいっぴんに作らない。残りは検索で絞り込む）
+  const LIMIT = 80;
+  const visible = $derived(matched.slice(0, LIMIT));
 
   /** 入力された文字を識別子にする。サイトの名前（youtube.com）か、`android:com.x` のような識別子だけ受け付ける */
   function toKey(input: string): string | null {
@@ -84,6 +87,9 @@
     {:else}
       {#if !showManual}<p class="empty">{q ? '見つかりません。サイト名（youtube.com など）をそのまま入れると追加できます。' : '候補がありません。サイト名（youtube.com など）を入れてください。'}</p>{/if}
     {/each}
+    {#if matched.length > LIMIT}
+      <p class="empty small">ほか {matched.length - LIMIT} 件。検索で絞り込んでください。</p>
+    {/if}
   </div>
 
   <div class="row picker-footer">

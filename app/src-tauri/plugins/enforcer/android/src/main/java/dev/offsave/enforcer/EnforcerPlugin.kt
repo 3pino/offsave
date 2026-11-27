@@ -16,6 +16,7 @@ import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSArray
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
+import java.util.concurrent.Executors
 import org.json.JSONObject
 
 // 命令の引数。Tauri が JSON から組み立てる
@@ -41,6 +42,9 @@ class AppIconArgs {
 @TauriPlugin
 class EnforcerPlugin(private val activity: Activity) : Plugin(activity) {
   private val agent get() = Agent.get(activity)
+
+  /** 重い命令（アプリ一覧・アイコン）は画面のスレッドではやらず、ここで 1 つずつやる（入力やスクロールを止めない）。 */
+  private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "offsave-worker").apply { isDaemon = true } }
 
   /** 権限の設定のために設定画面を開く間は、設定画面の見張りを止める。 */
   private fun enterSetup() {
@@ -151,24 +155,30 @@ class EnforcerPlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun appIcon(invoke: Invoke) {
     val args = invoke.parseArgs(AppIconArgs::class.java)
-    val png = Icons.pngBase64(activity, args.pkg)
-    invoke.resolve(JSObject().put("png", png ?: ""))
+    worker.execute {
+      val png = try { Icons.pngBase64(activity, args.pkg) } catch (e: Exception) { null }
+      invoke.resolve(JSObject().put("png", png ?: ""))
+    }
   }
 
   /** このデバイスの起動できるアプリ（ルールの対象を選ぶのに使う）。 */
   @Command
   fun installedApps(invoke: Invoke) {
-    val pm = activity.packageManager
-    val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-    val apps = JSArray()
-    pm.queryIntentActivities(launcher, 0)
-      .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
-      .distinctBy { it.first }
-      .filter { it.first != activity.packageName }
-      .sortedBy { it.second.lowercase() }
-      .forEach { (pkg, label) ->
-        apps.put(JSObject().put("package", pkg).put("label", label))
-      }
-    invoke.resolve(JSObject().put("apps", apps))
+    worker.execute {
+      val pm = activity.packageManager
+      val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+      val apps = JSArray()
+      // offsave 自身も含める（非表示の設定やルールの対象に選べるように）
+      // ホーム画面のアプリ（launcher3 など）も含める
+      val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+      (pm.queryIntentActivities(launcher, 0) + pm.queryIntentActivities(home, 0))
+        .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
+        .distinctBy { it.first }
+        .sortedBy { it.second.lowercase() }
+        .forEach { (pkg, label) ->
+          apps.put(JSObject().put("package", pkg).put("label", label))
+        }
+      invoke.resolve(JSObject().put("apps", apps))
+    }
   }
 }

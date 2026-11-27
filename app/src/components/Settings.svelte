@@ -18,7 +18,7 @@
   import { protection } from '../lib/protection.svelte';
   import { session } from '../lib/session.svelte';
   import { ui } from '../lib/ui.svelte';
-  import { RELEASES_URL, updater } from '../lib/updater.svelte';
+  import { updater } from '../lib/updater.svelte';
   import type { UserSettings } from '../lib/types';
   import Page from './Page.svelte';
   import ProtectionPanel from './ProtectionPanel.svelte';
@@ -105,9 +105,9 @@
 {:else if ui.settingsSub === 'hidden'}
   <SettingsHidden onback={closeSub} />
 {:else}
-<Page title="設定">
+<Page title="設定" header={false}>
   <Section title="アカウント">
-    <SettingRow name={saved.userName} description="Tailscale のアカウントで、自動でログインしています。" />
+    <SettingRow name={saved.userName} />
     <SettingRow name="サーバー" description={saved.serverUrl} />
   </Section>
 
@@ -119,8 +119,8 @@
         {/snippet}
       </SettingRow>
     {/if}
-    <SettingRow name="デバイス" description="登録したデバイスの一覧と、削除" icon={Smartphone} onclick={() => (ui.settingsSub = 'devices')} />
-    <SettingRow name="今日の利用の表示" description="ホーム画面のアプリなど、一覧に出さないもの" icon={Eye} onclick={() => (ui.settingsSub = 'hidden')} />
+    <SettingRow name="デバイス" icon={Smartphone} onclick={() => (ui.settingsSub = 'devices')} />
+    <SettingRow name="非表示のアプリ" icon={Eye} onclick={() => (ui.settingsSub = 'hidden')} />
   </Section>
 
   <Section title="日付と時間">
@@ -172,7 +172,6 @@
             <Button onclick={() => updater.openReleasePage()}>リリースのページを開く</Button>
           {/if}
         </div>
-        <p class="muted small">更新は <a href={RELEASES_URL}>GitHub のリリース</a>から、署名を確かめて入れます。</p>
       </div>
     </Section>
   {/if}

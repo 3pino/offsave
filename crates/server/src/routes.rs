@@ -24,6 +24,7 @@ pub fn router() -> Router<SharedState> {
     Router::new()
         .route("/me", get(me))
         .route("/me/settings", put(update_settings))
+        .route("/people", get(list_people))
         .route("/friends", get(list_friends).post(request_friend))
         .route("/friends/{id}/accept", post(accept_friend))
         .route("/friends/{id}", delete(remove_friend))
@@ -82,6 +83,26 @@ async fn update_settings(
 }
 
 // ---- 友達 ----
+
+/// 友達にできる人（offsave を使っていて、まだ友達でも申請中でもない人）。名前の検索に使う。
+async fn list_people(
+    State(state): State<SharedState>,
+    CurrentUser(user): CurrentUser,
+) -> AppResult<Json<Vec<User>>> {
+    let related: std::collections::HashSet<String> = friends::list(&state.pool, &user.id)
+        .await?
+        .into_iter()
+        .map(|(u, _)| u.id)
+        .collect();
+    Ok(Json(
+        users::others(&state.pool, &user.id)
+            .await?
+            .into_iter()
+            .filter(|u| !related.contains(&u.id))
+            .map(|u| u.to_user())
+            .collect(),
+    ))
+}
 
 async fn list_friends(
     State(state): State<SharedState>,

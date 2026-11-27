@@ -12,20 +12,7 @@
   const isSite = $derived(key.startsWith('domain:'));
   const initial = $derived([...names.label(key)][0]?.toUpperCase() ?? '?');
 
-  onMount(() => {
-    if (!el || typeof IntersectionObserver === 'undefined') {
-      icons.request(key);
-      return;
-    }
-    const io = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) {
-        icons.request(key);
-        io.disconnect();
-      }
-    });
-    io.observe(el);
-    return () => io.disconnect();
-  });
+  onMount(() => (el ? icons.watch(el, key) : undefined));
 </script>
 
 <span class="key-icon" bind:this={el} style:width="{size}px" style:height="{size}px" aria-hidden="true">

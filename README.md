@@ -75,11 +75,16 @@ OFFSAVE_BIND=<Tailscale の IP>:8090 OFFSAVE_DATA_DIR=/var/lib/offsave ./target/
 | `OFFSAVE_DATA_DIR` | `./data` | DB（`offsave.db`）の置き場所 |
 | `OFFSAVE_DEV` | なし | `1` で開発モード（認証をしない。`X-Dev-User` ヘッダーで誰にでもなれる）。**本番では使わない** |
 | `OFFSAVE_DEFAULT_TZ` | `Asia/Tokyo` | 新しいユーザーのタイムゾーン |
-| `OFFSAVE_SUSPECT_AFTER_SECS` | `180` | ハートビートがこの秒数途絶えたら、友達に「連絡が途絶えた」と通知する |
+| `OFFSAVE_SUSPECT_AFTER_SECS` | `600` | ハートビートがこの秒数途絶えたら、友達に「連絡が途絶えた」と通知する |
 | `OFFSAVE_TAILSCALE_SOCKET` | 自動 | tailscaled の LocalAPI のソケット |
 | `OFFSAVE_AUTO_UPDATE` | なし | `1` で自動更新（上の「更新の仕組み」）。systemd の `Restart=on-failure` が、入れ替えたあとの再起動をする |
 
-友達を招待するには、Tailscale の管理画面でサーバー機を[ノード共有](https://tailscale.com/kb/1084/sharing)します（disnans と同じ。ACL でこのポートだけを開ける）。
+友達を招待するには、Tailscale の管理画面でサーバー機を[ノード共有](https://tailscale.com/kb/1084/sharing)します（disnans と同じ）。**共有で入った人は、ACL で許可したポートにしか届きません。** disnans を共有済みでも、offsave のポートは別に足す必要があります（足さないと、友達の側は接続が止まったままになります）。
+
+```jsonc
+// Access Controls（login.tailscale.com/admin/acls）の "acls" に足す。"server" は hosts に書いたサーバー機の名前
+{ "action": "accept", "src": ["autogroup:shared"], "dst": ["server:8090"] }
+```
 サーバー管理者は、全員のデータを見られ、DB も書き換えられます。相互監視の前提で、管理者を信頼する運用です。
 
 ## Android アプリを入れる

@@ -17,7 +17,8 @@ class Ui {
   /** 設定で、開いて見せるサブ画面（ホームの警告から来たとき） */
   settingsSub = $state<SettingsSub | null>(null);
   /** 戻る操作で閉じる層（サブ画面）。新しいものが後ろ */
-  private layers = $state.raw<{ close: () => void }[]>([]);
+  // リアクティブにしない（$effect の中から pushLayer すると、読み書きで自分を何度も作り直してしまう）
+  private layers: { close: () => void }[] = [];
 
   constructor() {
     if (typeof matchMedia === 'function') {

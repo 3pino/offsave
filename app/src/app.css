@@ -7,6 +7,20 @@
   --hue: 144;
 }
 
+/* UI の文字は、長押し・ドラッグで選択させない（入力欄の中身と、`.selectable` を付けたものだけ選べる） */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input,
+textarea,
+[contenteditable='true'],
+.selectable {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* ---- 画面の枠（広い画面は左にナビ、モバイルは下にナビ） ---- */
 .shell {
   height: 100%;
@@ -47,6 +61,10 @@
 .page-body {
   flex: 1;
   min-height: 0;
+}
+/* 見出しの行が無い画面: ノッチ・ステータスバーの下に隙間を空ける */
+.page-headless {
+  padding-top: max(env(safe-area-inset-top), var(--space-4));
 }
 .page-inner {
   max-width: 720px;

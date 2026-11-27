@@ -23,7 +23,7 @@
   });
 </script>
 
-<Page title="通知">
+<Page title="通知" header={false}>
   {#each events.items as e (e.id)}
     <div class="card">
       <div class="card-title">

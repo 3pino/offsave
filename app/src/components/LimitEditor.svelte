@@ -3,7 +3,7 @@
   import IconButton from '@3pino/ui-kit-web/IconButton.svelte';
   import SegmentedButton from '@3pino/ui-kit-web/SegmentedButton.svelte';
   import { clock } from '../lib/format';
-  import { ALL_DAYS, WEEKDAYS, WEEKEND, WEEK_LABELS, newLimit, parseTime } from '../lib/limits';
+  import { WEEK_LABELS, newLimit, parseTime } from '../lib/limits';
   import type { Limit } from '../lib/types';
 
   // 制限 1 つの編集（1 日の合計 / 使えない時間帯 と、曜日）。値は持たず、変えるたびに onchange へ新しい制限を返す
@@ -32,12 +32,8 @@
     onchange({ ...newLimit(type), days: limit.days });
   }
 
-  function setDays(days: number) {
-    onchange({ ...limit, days });
-  }
-
   function toggleDay(i: number) {
-    setDays(limit.days ^ (1 << i));
+    onchange({ ...limit, days: limit.days ^ (1 << i) });
   }
 
   const num = (s: string) => (Number.isFinite(Number(s)) ? Math.max(0, Math.floor(Number(s))) : 0);
@@ -75,11 +71,6 @@
         <button type="button" class="chip" class:chip-on={!!(limit.days & (1 << i))} aria-pressed={!!(limit.days & (1 << i))} onclick={() => toggleDay(i)}>{w}</button>
       {/each}
     </div>
-    <div class="chips">
-      <button type="button" class="chip" class:chip-on={limit.days === ALL_DAYS} onclick={() => setDays(ALL_DAYS)}>毎日</button>
-      <button type="button" class="chip" class:chip-on={limit.days === WEEKDAYS} onclick={() => setDays(WEEKDAYS)}>平日</button>
-      <button type="button" class="chip" class:chip-on={limit.days === WEEKEND} onclick={() => setDays(WEEKEND)}>土日</button>
-    </div>
   </div>
 
   {#if limit.type === 'daily_total'}
@@ -97,7 +88,7 @@
       <input class="input time" type="time" aria-label="終了" value={clock(limit.end_min)} onchange={(e) => setEnd(e.currentTarget.value)} />
       <span>まで使えない</span>
     </div>
-    <p class="muted small">日をまたぐ指定もできます（例: 22:00 から 06:00）。</p>
+    <p class="muted small">日をまたぐ指定もできます。</p>
   {/if}
 </div>
 

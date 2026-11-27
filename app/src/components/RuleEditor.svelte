@@ -86,7 +86,7 @@
   }
 </script>
 
-<Page title={init ? 'ルールを編集' : 'ルールを追加'} onback={step === 2 ? () => (step = 1) : oncancel}>
+<Page title={(init ? 'ルールを編集' : 'ルールを追加') + (ownerName === 'あなた' ? '' : `（${ownerName}）`)} onback={step === 2 ? () => (step = 1) : oncancel}>
   {#snippet actions()}
     {#if step === 1}
       <Button variant="primary" onclick={next}>次へ</Button>
@@ -94,8 +94,6 @@
       <Button variant="primary" disabled={busy} onclick={save}>{busy ? '保存中…' : '保存'}</Button>
     {/if}
   {/snippet}
-
-  <p class="muted small editor-for">{ownerName}のルール ・ {step} / 2　{step === 1 ? '名前と対象' : '制限'}</p>
 
   {#if step === 1}
     <label class="field">
@@ -120,10 +118,6 @@
     </section>
 
     {#if error}<p class="error-text">{error}</p>{/if}
-    <div class="row">
-      <Button variant="primary" onclick={next}>次へ：制限を決める</Button>
-      <Button onclick={oncancel}>キャンセル</Button>
-    </div>
   {:else}
     <div class="card summary">
       <div class="card-title">{name.trim()}</div>
@@ -139,7 +133,6 @@
         <Button icon={Plus} onclick={() => limits.push(newLimit('daily_total'))}>1日の合計を足す</Button>
         <Button icon={Plus} onclick={() => limits.push(newLimit('window'))}>使えない時間帯を足す</Button>
       </div>
-      <p class="muted small">例: 合計 1 時間 ＋ 毎日 6:00–7:00 は禁止 ＋ 平日は 15:00–23:00 も禁止。</p>
     </section>
 
     <SettingRow name="有効にする" description="外すと、このルールは働きません。">
@@ -149,10 +142,6 @@
     </SettingRow>
 
     {#if error}<p class="error-text">{error}</p>{/if}
-    <div class="row">
-      <Button variant="primary" disabled={busy} onclick={save}>{busy ? '保存中…' : '保存'}</Button>
-      <Button onclick={() => (step = 1)}>戻る</Button>
-    </div>
   {/if}
 </Page>
 
@@ -165,10 +154,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-5);
-  }
-  .editor-block p,
-  .editor-for {
-    margin: 0;
   }
   .targets {
     display: flex;

@@ -88,3 +88,11 @@ pub async fn update_settings(
         .await?;
     Ok(())
 }
+
+/// 自分以外の、offsave を使っている人（友達の候補を探すのに使う）。
+pub async fn others(pool: &SqlitePool, me: &str) -> Result<Vec<UserRow>, sqlx::Error> {
+    sqlx::query_as("SELECT * FROM users WHERE id != ? ORDER BY display_name, login_name")
+        .bind(me)
+        .fetch_all(pool)
+        .await
+}
