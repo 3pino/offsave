@@ -28,7 +28,7 @@ impl RuleRow {
                 id: self.id,
                 name: self.name,
                 targets: serde_json::from_str::<Vec<Target>>(&self.targets).ok()?,
-                limit: serde_json::from_str::<Limit>(&self.limit_json).ok()?,
+                limits: serde_json::from_str::<Vec<Limit>>(&self.limit_json).ok()?,
                 enabled: self.enabled != 0,
             },
             owner_id: self.owner_id,
@@ -71,7 +71,7 @@ pub async fn insert(
     .bind(author_id)
     .bind(&rule.name)
     .bind(serde_json::to_string(&rule.targets).unwrap_or_default())
-    .bind(serde_json::to_string(&rule.limit).unwrap_or_default())
+    .bind(serde_json::to_string(&rule.limits).unwrap_or_default())
     .bind(rule.enabled as i64)
     .bind(now)
     .bind(now)
@@ -86,7 +86,7 @@ pub async fn update(pool: &SqlitePool, id: &str, rule: &Rule) -> Result<(), sqlx
     )
     .bind(&rule.name)
     .bind(serde_json::to_string(&rule.targets).unwrap_or_default())
-    .bind(serde_json::to_string(&rule.limit).unwrap_or_default())
+    .bind(serde_json::to_string(&rule.limits).unwrap_or_default())
     .bind(rule.enabled as i64)
     .bind(now_ms())
     .bind(id)

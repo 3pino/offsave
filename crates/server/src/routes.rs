@@ -266,7 +266,7 @@ async fn user_status(
 struct RuleInput {
     name: String,
     targets: Vec<Target>,
-    limit: Limit,
+    limits: Vec<Limit>,
     #[serde(default = "yes")]
     enabled: bool,
 }
@@ -281,7 +281,7 @@ impl RuleInput {
             id: String::new(),
             name: self.name.trim().to_owned(),
             targets: self.targets,
-            limit: self.limit,
+            limits: self.limits,
             enabled: self.enabled,
         };
         rule.validate().map_err(AppError::bad_request)?;

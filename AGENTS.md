@@ -15,14 +15,17 @@
 - URL は、ホスト名だけを扱う。パス・クエリ・フラグメントは、読んだ時点で捨てる（保存も送信もしない）。
 - 保護を弱める操作（無効化・解除・端末の削除など）は、必ず友達に通知する。
 - 画面の文言は日本語。「端末」ではなく「デバイス」と書く。
+- 画面の部品・色は、disnans と同じ共有パッケージ（`@3pino/design-system`・`ui-kit-web`・`app-kit-web`）を使う。色の直書きはしない（トークンを使う）。色相は `app/src/app.css` の `--hue`（144）で、アイコン（`app/scripts/make-icons.mjs`）と同じ値にする。
+- ナビゲーションは「ホーム・ルール・友達・通知・設定」。ルールは 1 つのタブにまとめ、ルールは複数の制限（`limits`）を持つ。
+- 署名の鍵（`~/.config/offsave-keys/`）と、GitHub の Secrets は、リポジトリに入れない・出力に出さない。リリースの手順は README の「リリースの作り方」。
 - 見た目は、実機・エミュレーターで人が最終確認する（スクリーンショットでの確認は補助）。
 
 ## テスト
 
 ```sh
 cargo test --workspace && cargo clippy --workspace --all-targets
-cd app && npm run check
-cd app/src-tauri/gen/android && ./gradlew :tauri-plugin-enforcer:testDebugUnitTest
+cd app && npm run check && npm test
+cd app/src-tauri/gen/android && ./gradlew :tauri-plugin-enforcer:testDebugUnitTest :tauri-plugin-apk-updater:testDebugUnitTest
 ```
 
 ## ビルド

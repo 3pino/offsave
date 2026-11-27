@@ -146,7 +146,7 @@ fn game_rule(seconds: u32) -> Value {
     json!({
         "name": "ゲーム",
         "targets": [{ "label": "ゲーム", "keys": ["android:com.example.game"] }],
-        "limit": { "type": "daily_total", "seconds": seconds },
+        "limits": [{ "type": "daily_total", "seconds": seconds }],
     })
 }
 
@@ -223,7 +223,15 @@ async fn permissions_on_rules_and_status() {
     let (code, _) = bob
         .post(
             &format!("/users/{a_id}/rules"),
-            json!({ "name": "x", "targets": [{"label":"a","keys":["bad key"]}], "limit": {"type":"daily_total","seconds":1} }),
+            json!({ "name": "x", "targets": [{"label":"a","keys":["bad key"]}], "limits": [{"type":"daily_total","seconds":1}] }),
+        )
+        .await;
+    assert_eq!(code, 400);
+    // 制限が 1 つもないルールも弾く
+    let (code, _) = bob
+        .post(
+            &format!("/users/{a_id}/rules"),
+            json!({ "name": "x", "targets": [{"label":"a","keys":["android:a"]}], "limits": [] }),
         )
         .await;
     assert_eq!(code, 400);
@@ -361,6 +369,41 @@ async fn unlock_notifies_friend_with_reason_and_updates_policy() {
         .send(&DeviceMsg::Unlock { reason: "  ".into(), started_at: now, until: now + 60_000 })
         .await;
     assert!(matches!(alice_phone.recv().await, ServerMsg::Error { .. }));
+}
+
+#[tokio::test]
+async fn rule_keeps_several_limits_with_weekdays() {
+    let s = DevServer::start().await;
+    let (alice, bob) = (Client::new(&s, "alice@t"), Client::new(&s, "bob@t"));
+    let (a_id, _) = make_friends(&alice, &bob).await;
+
+    // 合計 1 時間、6:00–7:00 は禁止、平日は 15:00–23:00 も禁止
+    let limits = json!([
+        { "type": "daily_total", "seconds": 3600 },
+        { "type": "window", "days": 127, "start_min": 360, "end_min": 420 },
+        { "type": "window", "days": 31, "start_min": 900, "end_min": 1380 },
+    ]);
+    let (code, body) = bob
+        .post(
+            &format!("/users/{a_id}/rules"),
+            json!({ "name": "ゲーム", "targets": [{"label":"a","keys":["android:a"]}], "limits": limits }),
+        )
+        .await;
+    assert_eq!(code, 200);
+    // days を省略した合計は「毎日」になる
+    assert_eq!(body["limits"][0], json!({ "type": "daily_total", "days": 127, "seconds": 3600 }));
+
+    let status: UserStatus = serde_json::from_value(alice.get(&format!("/users/{a_id}/status")).await.1).unwrap();
+    assert_eq!(status.rules[0].rule.limits.len(), 3);
+
+    // 曜日が空の制限は弾く
+    let (code, _) = bob
+        .post(
+            &format!("/users/{a_id}/rules"),
+            json!({ "name": "x", "targets": [{"label":"a","keys":["android:a"]}], "limits": [{"type":"window","days":0,"start_min":0,"end_min":60}] }),
+        )
+        .await;
+    assert_eq!(code, 400);
 }
 
 #[tokio::test]

@@ -1,73 +1,133 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import Events from './Events.svelte';
-  import Friends from './Friends.svelte';
-  import Home from './Home.svelte';
-  import Setup from './Setup.svelte';
+  import { onMount, untrack } from 'svelte';
+  import Bell from '@lucide/svelte/icons/bell';
+  import House from '@lucide/svelte/icons/house';
+  import ListChecks from '@lucide/svelte/icons/list-checks';
+  import Settings from '@lucide/svelte/icons/settings';
+  import Users from '@lucide/svelte/icons/users';
+  import NavBar, { type NavBarItem } from '@3pino/ui-kit-web/NavBar.svelte';
+  import { isBackKey, startBackNav } from '@3pino/app-kit-web/core/backNav';
+  import { startContextMenuGuard } from '@3pino/app-kit-web/core/contextMenu';
+  import { externalLinkHref } from '@3pino/app-kit-web/core/externalLink';
+  import { isAndroid, isTauri } from '@3pino/app-kit-web/core/platform';
+  import { startViewportSync, startZoomGuard } from '@3pino/app-kit-web/core/viewport';
+  import ConfirmDialog from '@3pino/app-kit-web/shell/ConfirmDialog.svelte';
+  import Toasts from '@3pino/app-kit-web/shell/Toasts.svelte';
+  import { showUpdateBadge, UPDATE_BADGE_LABEL } from '@3pino/app-kit-web/updater';
+  import Events from './components/Events.svelte';
+  import Friends from './components/Friends.svelte';
+  import Home from './components/Home.svelte';
+  import Rules from './components/Rules.svelte';
+  import Settings_ from './components/Settings.svelte';
+  import Setup from './components/Setup.svelte';
+  import { events } from './lib/events.svelte';
   import { names } from './lib/names.svelte';
   import { session } from './lib/session.svelte';
-
-  type Tab = 'home' | 'friends' | 'events';
-  let tab = $state<Tab>('home');
+  import { ui, type Tab } from './lib/ui.svelte';
+  import { updater } from './lib/updater.svelte';
+  import { startUpdateWatch } from './lib/updateWatch';
 
   onMount(() => {
-    names.load();
+    void names.load();
+    // キーボードを出したときも、アプリの高さを見えている高さに合わせる。拡大（ピンチ・Ctrl+ホイールなど）は止める
+    const stopViewport = startViewportSync();
+    const stopZoom = startZoomGuard();
+    // 右クリックの WebView の既定のメニュー（更新・保存・印刷など）は出さない
+    const stopMenu = startContextMenuGuard();
+    // アプリのアップデートを裏で確認し、新しい版があれば知らせる
+    const stopUpdate = startUpdateWatch();
+    return () => {
+      stopViewport();
+      stopZoom();
+      stopMenu();
+      stopUpdate();
+    };
   });
 
-  const TABS: [Tab, string][] = [
-    ['home', 'ホーム'],
-    ['friends', '友達'],
-    ['events', '通知'],
-  ];
+  // 外部リンクは、OS の既定のブラウザーで開く
+  onMount(() => {
+    const onClick = (e: MouseEvent) => {
+      const href = externalLinkHref(e, location.origin);
+      if (!href) return;
+      e.preventDefault();
+      void import('@tauri-apps/plugin-opener').then((m) => m.openUrl(href));
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  });
+
+  // PC の Alt+←: Android の戻るボタンと同じく、サブ画面を 1 つ閉じる
+  onMount(() => {
+    if (isAndroid()) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!isBackKey(e) || !ui.back()) return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  // Android の戻るボタンで、開いているサブ画面を 1 つずつ閉じる（閉じるものが無ければ、アプリが裏に回る）
+  $effect(() => {
+    if (!isAndroid()) return;
+    const nav = startBackNav({ depth: () => ui.depth(), back: () => ui.back() }, history, window, { depthKey: 'offsaveDepth' });
+    $effect(() => {
+      void ui.depth();
+      untrack(() => nav.sync());
+    });
+    return () => nav.stop();
+  });
+
+  // 通知（友達のイベント）は、画面を開いていなくても取り直す（ナビゲーションの点のため）
+  $effect(() => {
+    if (!session.saved) return;
+    events.start();
+    return () => events.stop();
+  });
+
+  const items = $derived<NavBarItem[]>([
+    { id: 'home', label: 'ホーム', icon: House },
+    { id: 'rules', label: 'ルール', icon: ListChecks },
+    { id: 'friends', label: '友達', icon: Users },
+    { id: 'events', label: '通知', icon: Bell, badge: ui.tab === 'events' ? null : events.unseen },
+    { id: 'settings', label: '設定', icon: Settings, alert: showUpdateBadge(updater.state) ? UPDATE_BADGE_LABEL : null },
+  ]);
 </script>
 
-{#if !session.saved}
+{#if !isTauri()}
+  <p class="only-tauri">offsave は Tauri 版（Windows・Linux・Android）でだけ動きます。</p>
+{:else if !session.saved}
   <Setup />
 {:else}
-  <div class="shell">
-    <main>
-      {#if tab === 'home'}<Home />{:else if tab === 'friends'}<Friends />{:else}<Events />{/if}
+  <div class="shell" class:shell-mobile={ui.isMobile}>
+    <main class="shell-main">
+      {#if ui.tab === 'home'}
+        <Home />
+      {:else if ui.tab === 'rules'}
+        <Rules />
+      {:else if ui.tab === 'friends'}
+        <Friends />
+      {:else if ui.tab === 'events'}
+        <Events />
+      {:else}
+        <Settings_ />
+      {/if}
     </main>
-    <nav>
-      {#each TABS as [id, label]}
-        <button class:active={tab === id} onclick={() => (tab = id)}>{label}</button>
-      {/each}
-    </nav>
+    <NavBar
+      id="nav-bar"
+      class="app-nav-bar {ui.isMobile ? '' : 'nav-bar-side'}"
+      label="ナビゲーション"
+      {items}
+      selected={ui.tab}
+      onselect={(id) => ui.selectTab(id as Tab)}
+    />
   </div>
 {/if}
+<Toasts toasts={ui.shell.toasts} dismiss={(id) => ui.shell.dismiss(id)} />
+<ConfirmDialog request={ui.shell.confirmReq} />
 
 <style>
-  .shell {
-    display: flex;
-    flex-direction: column;
-    height: 100dvh;
-  }
-  main {
-    flex: 1;
-    overflow-y: auto;
-    padding: 16px 16px 24px;
-    padding-top: max(16px, env(safe-area-inset-top));
-    max-width: 720px;
-    width: 100%;
-    margin: 0 auto;
-  }
-  nav {
-    display: flex;
-    border-top: 1px solid var(--line);
-    background: var(--card);
-    /* Android のジェスチャーバーに重ならないようにする（env が 0 のときの下限つき） */
-    padding-bottom: max(env(safe-area-inset-bottom), 20px);
-  }
-  nav button {
-    flex: 1;
-    border: none;
-    border-radius: 0;
-    padding: 12px 0;
-    background: transparent;
-    color: var(--muted);
-  }
-  nav button.active {
-    color: var(--accent);
-    font-weight: 600;
+  .only-tauri {
+    padding: var(--space-8);
   }
 </style>

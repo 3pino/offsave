@@ -1,4 +1,4 @@
-import type { EventKind, Limit, Ms } from './types';
+import type { EventKind, Ms } from './types';
 
 /** 秒 → 「1時間 5分」「30秒」 */
 export function duration(seconds: number): string {
@@ -8,22 +8,10 @@ export function duration(seconds: number): string {
   return h > 0 ? `${h}時間${m > 0 ? ` ${m}分` : ''}` : `${m}分`;
 }
 
+/** 0 時からの分 → `HH:MM`（1440 は 00:00） */
 export function clock(min: number): string {
   const m = min === 1440 ? 0 : min;
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-}
-
-const WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日'];
-
-export function weekdays(bits: number): string {
-  if ((bits & 0x7f) === 0x7f) return '毎日';
-  return WEEKDAYS.filter((_, i) => bits & (1 << i)).join('');
-}
-
-export function limitText(l: Limit): string {
-  return l.type === 'daily_total'
-    ? `1日 ${duration(l.seconds)}まで`
-    : `${weekdays(l.days)} ${clock(l.start_min)}–${clock(l.end_min)} は使えない`;
 }
 
 /** `android:com.example.app` → `com.example.app` */

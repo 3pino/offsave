@@ -9,17 +9,22 @@ data class Segment(val key: String, val start: Long, val end: Long)
 
 data class Target(val label: String, val keys: List<String>)
 
+const val ALL_DAYS = 0x7f
+
+/** 制限 1 つ。ルールは複数持ち、どれか 1 つでも当たっていれば使えない。 */
 sealed class Limit {
   /** 使えない時間帯。days は開始する曜日のビット（bit0 = 月）。 */
   data class Window(val days: Int, val startMin: Int, val endMin: Int) : Limit()
-  data class DailyTotal(val seconds: Long) : Limit()
+
+  /** 1 日（論理日）の合計の上限。days はその論理日の曜日。 */
+  data class DailyTotal(val days: Int, val seconds: Long) : Limit()
 }
 
 data class Rule(
   val id: String,
   val name: String,
   val targets: List<Target>,
-  val limit: Limit,
+  val limits: List<Limit>,
   val enabled: Boolean,
 ) {
   fun matches(key: String): Boolean = targets.any { t -> t.keys.any { keyMatches(it, key) } }
@@ -69,20 +74,21 @@ object Wire {
   fun clock(o: JSONObject) = Clock(o.getInt("utc_offset_min"), o.getInt("day_boundary_min"))
 
   fun rule(o: JSONObject): Rule {
-    val l = o.getJSONObject("limit")
-    val limit = when (l.getString("type")) {
-      "window" -> Limit.Window(l.getInt("days"), l.getInt("start_min"), l.getInt("end_min"))
-      else -> Limit.DailyTotal(l.getLong("seconds"))
-    }
     return Rule(
       id = o.getString("id"),
       name = o.getString("name"),
       targets = o.getJSONArray("targets").map { t ->
         Target(t.getString("label"), (0 until t.getJSONArray("keys").length()).map { t.getJSONArray("keys").getString(it) })
       },
-      limit = limit,
+      limits = o.getJSONArray("limits").map(::limit),
       enabled = o.getBoolean("enabled"),
     )
+  }
+
+  fun limit(l: JSONObject): Limit = when (l.getString("type")) {
+    "window" -> Limit.Window(l.getInt("days"), l.getInt("start_min"), l.getInt("end_min"))
+    // days が無い合計は毎日
+    else -> Limit.DailyTotal(l.optInt("days", ALL_DAYS), l.getLong("seconds"))
   }
 
   fun override(o: JSONObject) = Override(o.getString("id"), o.getString("date"), o.optStringOrNull("rule_id"))

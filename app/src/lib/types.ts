@@ -13,22 +13,26 @@ export interface Target {
   keys: string[];
 }
 
+/**
+ * 制限 1 つ。ルールは複数持ち、どれか 1 つでも当たっていれば使えない。
+ * `days` は曜日のビット（bit0 = 月 … bit6 = 日）。window は「始まる日」、daily_total は「論理日の曜日」。
+ */
 export type Limit =
   | { type: 'window'; days: number; start_min: number; end_min: number }
-  | { type: 'daily_total'; seconds: number };
+  | { type: 'daily_total'; days: number; seconds: number };
 
 export interface Rule {
   id: string;
   name: string;
   targets: Target[];
-  limit: Limit;
+  limits: Limit[];
   enabled: boolean;
 }
 
 export interface RuleInput {
   name: string;
   targets: Target[];
-  limit: Limit;
+  limits: Limit[];
   enabled: boolean;
 }
 

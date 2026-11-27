@@ -1,10 +1,11 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invokeNative } from '@3pino/app-kit-web/core/nativeInvoke';
+import { isAndroid as detectAndroid } from '@3pino/app-kit-web/core/platform';
 import type { InstalledApp, NativeStatus } from './types';
 
 /** Android の強制サービス（Kotlin の enforcer プラグイン）。Android 以外では使えない。 */
-export const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+export const isAndroid = detectAndroid();
 
-const call = <T>(cmd: string, args?: Record<string, unknown>) => invoke<T>(`plugin:enforcer|${cmd}`, args);
+const call = <T>(cmd: string, args?: Record<string, unknown>) => invokeNative<T>('enforcer', cmd, args);
 
 export const native = {
   status: () => call<NativeStatus>('status'),

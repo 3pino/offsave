@@ -28,17 +28,37 @@ Android ── WebSocket（60 秒ごとのハートビート）──▶ サー�
 
 ## ビルド済みのファイルを使う
 
-[Releases](https://github.com/3pino/offsave/releases) に、タグ（`v*`）ごとのファイルがあります。最新の main のビルドは、[Actions](https://github.com/3pino/offsave/actions/workflows/ci.yml) の成功した実行の「Artifacts」から取れます（GitHub にログインが必要）。
-
-リリースの作り方: `git tag -a v0.2.0 -m "..." && git push origin v0.2.0`（CI が成功したら、自動で Release ができる）。
+[Releases](https://github.com/3pino/offsave/releases/latest) に、署名済みのファイルがあります。
 
 | ファイル | 内容 |
 |---|---|
-| `offsave-server-linux-x86_64` | サーバー（Linux x86_64） |
-| `offsave-android-arm64-debug` | Android の APK（arm64の実機向け。デバッグ署名） |
-| `offsave-desktop-linux` / `offsave-desktop-windows` | デスクトップ版（友達の状況を見るダッシュボード） |
+| `offsave_<版>_android-arm64.apk` | Android（arm64 の実機） |
+| `offsave_<版>_x64-setup.exe` | Windows（友達の状況を見るダッシュボード） |
+| `offsave_<版>_amd64.AppImage` / `.deb` | Linux（同上） |
+| `offsave-server_linux-x64`（`.sha256`） | サーバー（Linux x86_64） |
 
-APK のデバッグ署名の鍵は、ビルドのたびに変わります。入れ替えるときは、先にアンインストールが要ります（端末管理者を有効にしている場合は、先に無効にする）。
+## 更新の仕組み
+
+- **Android**: アプリの「設定」→「アプリの更新」が、GitHub の最新リリースを見て、APK を取ってインストーラーを開く。新しい版があると、トーストと「設定」の点で知らせる。APK はリリースの鍵で署名してあり、Android のインストーラーが「入っているアプリと同じ鍵」でないと入れない（ダウンロード元もこのリポジトリのリリースに限る）。
+- **Windows / Linux（デスクトップ）**: Tauri のアップデーター。`latest.json` を見て、署名（minisign）を確かめてから入れる。公開鍵はアプリに入っている。
+- **サーバー**: `OFFSAVE_AUTO_UPDATE=1` で、最新の正式版を 10 分おきに見て、sha256 と `--version` を確かめ、DB をバックアップしてから入れ替えて再起動する。
+
+### リリースの作り方
+
+```sh
+scripts/bump-version.sh 0.3.0        # 版をそろえる（Tauri の設定・アプリ・サーバー）
+git commit -am "v0.3.0" && git push
+git tag -a v0.3.0 -m "..." && git push origin v0.3.0   # Actions がビルドし、署名して、Release を公開する
+```
+
+署名の鍵（手元の `~/.config/offsave-keys/`、GitHub の Secrets にも同じもの）:
+
+| 鍵 | 用途 | 失うと |
+|---|---|---|
+| `android.jks`（`android.password`） | APK の署名 | 既存のアプリを更新できない（全員がアンインストールして入れ直し。端末管理者の解除も必要） |
+| `updater.key`（`updater.password`） | デスクトップの自動更新の署名 | 既存のデスクトップ版が自動更新できない（入れ直し） |
+
+**鍵は必ずバックアップすること**（リポジトリには入れない）。手元でリリース署名の APK を作るときも、同じ鍵を `~/.config/offsave-keys/` から読む。
 
 ## サーバーを動かす（管理者）
 
@@ -57,13 +77,14 @@ OFFSAVE_BIND=<Tailscale の IP>:8090 OFFSAVE_DATA_DIR=/var/lib/offsave ./target/
 | `OFFSAVE_DEFAULT_TZ` | `Asia/Tokyo` | 新しいユーザーのタイムゾーン |
 | `OFFSAVE_SUSPECT_AFTER_SECS` | `180` | ハートビートがこの秒数途絶えたら、友達に「連絡が途絶えた」と通知する |
 | `OFFSAVE_TAILSCALE_SOCKET` | 自動 | tailscaled の LocalAPI のソケット |
+| `OFFSAVE_AUTO_UPDATE` | なし | `1` で自動更新（上の「更新の仕組み」）。systemd の `Restart=on-failure` が、入れ替えたあとの再起動をする |
 
 友達を招待するには、Tailscale の管理画面でサーバー機を[ノード共有](https://tailscale.com/kb/1084/sharing)します（disnans と同じ。ACL でこのポートだけを開ける）。
 サーバー管理者は、全員のデータを見られ、DB も書き換えられます。相互監視の前提で、管理者を信頼する運用です。
 
 ## Android アプリを入れる
 
-APK は `app/src-tauri/gen/android/app/build/outputs/apk/` にできます（ビルドは下記）。
+リリースの APK を入れます（以後は、アプリの「設定」から更新できます）。
 
 1. APK を入れて開き、サーバーのアドレス（`http://100.x.y.z:8090`）を入れて「同意して接続する」。
 2. ホーム画面の「このデバイス」の 4 項目を、上から順に有効にする。
@@ -77,7 +98,7 @@ APK は `app/src-tauri/gen/android/app/build/outputs/apk/` にできます（ビ
 
 ```sh
 cargo test --workspace                       # 判定ロジック・サーバー
-cd app && npm install && npm run check       # 画面の型検査
+cd app && npm install && npm run check && npm test   # 画面の型検査・試験
 cd app/src-tauri/gen/android && ./gradlew :tauri-plugin-enforcer:testDebugUnitTest   # Android の判定・追跡（Rust と共通の試験データ）
 ```
 
@@ -99,7 +120,8 @@ OFFSAVE_DEV=1 OFFSAVE_BIND=127.0.0.1:8090 OFFSAVE_DATA_DIR=/tmp/offsave-dev carg
 
 - `crates/core`: ルールの判定（猶予・一時解除・日付の境界）、利用区間の和集合、サーバーとの型。
 - `crates/server`: axum + SQLite。REST と、デバイスの WebSocket（`/api/ws/device`）。
-- `app`: Tauri + Svelte の画面。
+- `app`: Tauri + Svelte の画面。見た目は [@3pino/design-system](https://github.com/3pino/design-system)・[ui-kit-web](https://github.com/3pino/ui-kit-web)・[app-kit-web](https://github.com/3pino/app-kit-web)（disnans と同じ）。色相は 144（`app/src/app.css`）。アイコンはリポジトリ直下の `icon.svg` から `npm run icons`。
+- `app/src-tauri/plugins/apk-updater`: Android のアプリ更新（APK を取ってインストーラーを開く）。
 - `app/src-tauri/plugins/enforcer`: Android の強制（Kotlin）。`Engine.kt` は `crates/core` の判定の移植で、`crates/core/tests/vectors/engine.json` を両方で試験して一致を保つ。
 
 ## 既知の限界

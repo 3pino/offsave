@@ -42,7 +42,7 @@ data class EngineInput(
 
 class LocalTime(val day: Long, val weekday: Int, val minute: Int)
 
-class Day(val date: String, val start: Long, val end: Long)
+class Day(val date: String, val weekday: Int, val start: Long, val end: Long)
 
 fun localTime(now: Long, clock: Clock): LocalTime {
   val local = now + clock.utcOffsetMin * MIN_MS
@@ -54,7 +54,7 @@ fun logicalDay(now: Long, clock: Clock): Day {
   val shift = (clock.utcOffsetMin - clock.dayBoundaryMin) * MIN_MS
   val d = Math.floorDiv(now + shift, DAY_MS)
   val start = d * DAY_MS - shift
-  return Day(formatDate(d), start, start + DAY_MS)
+  return Day(formatDate(d), weekdayOf(d), start, start + DAY_MS)
 }
 
 /** 0 = 月。1970-01-01 は木曜。 */
@@ -156,39 +156,49 @@ fun decide(input: EngineInput): Decision {
   for (rule in input.rules) {
     if (!rule.enabled || !rule.matches(key) || overridden(rule, input.overrides, day.date)) continue
 
-    val occurrence: String?
-    val kind: BlockKind
-    when (val limit = rule.limit) {
-      is Limit.DailyTotal -> {
-        kind = BlockKind.DAILY_TOTAL
-        val used = usedMs(rule, input.segments, day.start, day.end)
-        val max = limit.seconds * 1000
-        if (used >= max) {
-          occurrence = day.date
-        } else {
-          occurrence = null
-          wakeAt(now + (max - used))
+    // 利用時間は、ルールのどの制限でも同じ（必要になったときだけ数える）
+    var used: Long? = null
+    for ((index, limit) in rule.limits.withIndex()) {
+      val occurrence: String?
+      val kind: BlockKind
+      when (limit) {
+        is Limit.DailyTotal -> {
+          kind = BlockKind.DAILY_TOTAL
+          // 論理日が変わると合計も曜日も変わる
+          wakeAt(day.end)
+          if (limit.days and (1 shl day.weekday) == 0) {
+            occurrence = null
+          } else {
+            val u = used ?: usedMs(rule, input.segments, day.start, day.end).also { used = it }
+            val max = limit.seconds * 1000
+            if (u >= max) {
+              occurrence = day.date
+            } else {
+              occurrence = null
+              wakeAt(now + (max - u))
+            }
+          }
+        }
+        is Limit.Window -> {
+          kind = BlockKind.WINDOW
+          occurrence = windowOccurrence(limit.days, limit.startMin, limit.endMin, now, input.clock)
+          if (occurrence == null) nextWindowStart(limit.days, limit.startMin, now, input.clock)?.let(::wakeAt)
         }
       }
-      is Limit.Window -> {
-        kind = BlockKind.WINDOW
-        occurrence = windowOccurrence(limit.days, limit.startMin, limit.endMin, now, input.clock)
-        if (occurrence == null) nextWindowStart(limit.days, limit.startMin, now, input.clock)?.let(::wakeAt)
-      }
-    }
-    if (occurrence == null) continue
+      if (occurrence == null) continue
 
-    val graceKey = "${rule.id}|$occurrence|${input.lastUnlockEnd}"
-    val started = input.graces[graceKey] ?: run {
-      newGraces.add(graceKey to now)
-      now
-    }
-    val until = started + GRACE_MS
-    if (now < until) {
-      wakeAt(until)
-      if (grace == null || until < grace.until) grace = Verdict.Grace(rule.id, until)
-    } else if (block == null) {
-      block = Verdict.Block(rule.id, kind)
+      val graceKey = "${rule.id}|$index@$occurrence|${input.lastUnlockEnd}"
+      val started = input.graces[graceKey] ?: run {
+        newGraces.add(graceKey to now)
+        now
+      }
+      val until = started + GRACE_MS
+      if (now < until) {
+        wakeAt(until)
+        if (grace == null || until < grace.until) grace = Verdict.Grace(rule.id, until)
+      } else if (block == null) {
+        block = Verdict.Block(rule.id, kind)
+      }
     }
   }
 

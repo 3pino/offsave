@@ -11,6 +11,7 @@ pub mod state;
 pub mod store;
 pub mod tailscale;
 pub mod timeutil;
+pub mod update;
 pub mod watchdog;
 pub mod ws;
 

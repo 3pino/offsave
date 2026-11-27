@@ -45,6 +45,8 @@ pub struct LocalTime {
 pub struct Day {
     /// `YYYY-MM-DD`（論理日の始まりのローカルの日付）。
     pub date: String,
+    /// その日付の曜日（0 = 月 … 6 = 日）。
+    pub weekday: u8,
     /// 始まり（含む）。
     pub start: Ms,
     /// 終わり（含まない）。
@@ -67,6 +69,7 @@ pub fn logical_day(now: Ms, clock: &Clock) -> Day {
     let start = d * DAY_MS - (clock.utc_offset_min as Ms - clock.day_boundary_min as Ms) * MIN_MS;
     Day {
         date: format_date(d),
+        weekday: weekday_of(d),
         start,
         end: start + DAY_MS,
     }

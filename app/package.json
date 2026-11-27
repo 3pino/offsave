@@ -1,26 +1,38 @@
 {
   "name": "offsave-app",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "icons": "node scripts/make-icons.mjs && tauri icon src-tauri/icons/icon-manifest.json",
     "tauri": "tauri",
     "tauri:dev": "tauri dev"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.12.2"
+    "@3pino/app-kit-web": "git+https://github.com/3pino/app-kit-web.git#v0.6.2",
+    "@3pino/design-system": "git+https://github.com/3pino/design-system.git#v0.4.1",
+    "@3pino/ui-kit-web": "git+https://github.com/3pino/ui-kit-web.git#v0.3.6",
+    "@lucide/svelte": "^1.53.0",
+    "@tauri-apps/api": "^2.12.2",
+    "@tauri-apps/plugin-opener": "^2.7.0",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.13.2",
+    "lucide": "^1.53.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tauri-apps/cli": "^2.12.1",
     "@tsconfig/svelte": "^5.0.8",
     "@types/node": "^26.6.10",
+    "jsdom": "^29.1.1",
     "svelte": "^5.57.2",
     "svelte-check": "^4.7.6",
     "typescript": "^6.0.3",
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
   }
 }

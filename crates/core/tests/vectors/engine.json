@@ -2,190 +2,1124 @@
   {
     "name": "under_limit_allows_and_schedules_wakeup",
     "input": {
-      "rules": [{"id": "r", "name": "r", "targets": [{"label": "a", "keys": ["android:a"]}], "limit": {"type": "daily_total", "seconds": 600}, "enabled": true}],
-      "overrides": [], "unlock_until": 0, "last_unlock_end": 0,
-      "segments": [{"key": "android:a", "start": 1795575500000, "end": 1795575600000}],
-      "graces": {}, "now": 1795575600000,
-      "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
+      "rules": [
+        {
+          "id": "r",
+          "name": "r",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "enabled": true,
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 600
+            }
+          ]
+        }
+      ],
+      "overrides": [],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
+      "segments": [
+        {
+          "key": "android:a",
+          "start": 1795575500000,
+          "end": 1795575600000
+        }
+      ],
+      "graces": {},
+      "now": 1795575600000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
       "current_key": "android:a"
     },
-    "expect": {"verdict": {"type": "allow"}, "new_graces": [], "next_wakeup": 1795576100000}
+    "expect": {
+      "verdict": {
+        "type": "allow"
+      },
+      "new_graces": [],
+      "next_wakeup": 1795576100000
+    }
   },
   {
     "name": "reaching_daily_limit_starts_grace",
     "input": {
-      "rules": [{"id": "r", "name": "r", "targets": [{"label": "a", "keys": ["android:a"]}], "limit": {"type": "daily_total", "seconds": 60}, "enabled": true}],
-      "overrides": [], "unlock_until": 0, "last_unlock_end": 0,
-      "segments": [{"key": "android:a", "start": 1795575540000, "end": 1795575600000}],
-      "graces": {}, "now": 1795575600000,
-      "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
+      "rules": [
+        {
+          "id": "r",
+          "name": "r",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "enabled": true,
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 60
+            }
+          ]
+        }
+      ],
+      "overrides": [],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
+      "segments": [
+        {
+          "key": "android:a",
+          "start": 1795575540000,
+          "end": 1795575600000
+        }
+      ],
+      "graces": {},
+      "now": 1795575600000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
       "current_key": "android:a"
     },
-    "expect": {"verdict": {"type": "grace", "rule_id": "r", "until": 1795575660000}, "new_graces": [["r|2026-11-25|0", 1795575600000]], "next_wakeup": 1795575660000}
+    "expect": {
+      "verdict": {
+        "type": "grace",
+        "rule_id": "r",
+        "until": 1795575660000
+      },
+      "new_graces": [
+        [
+          "r|0@2026-11-25|0",
+          1795575600000
+        ]
+      ],
+      "next_wakeup": 1795575660000
+    }
   },
   {
     "name": "blocked_after_grace_expires",
     "input": {
-      "rules": [{"id": "r", "name": "r", "targets": [{"label": "a", "keys": ["android:a"]}], "limit": {"type": "daily_total", "seconds": 60}, "enabled": true}],
-      "overrides": [], "unlock_until": 0, "last_unlock_end": 0,
-      "segments": [{"key": "android:a", "start": 1795575480000, "end": 1795575600000}],
-      "graces": {"r|2026-11-25|0": 1795575539000}, "now": 1795575600000,
-      "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
+      "rules": [
+        {
+          "id": "r",
+          "name": "r",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "enabled": true,
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 60
+            }
+          ]
+        }
+      ],
+      "overrides": [],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
+      "segments": [
+        {
+          "key": "android:a",
+          "start": 1795575480000,
+          "end": 1795575600000
+        }
+      ],
+      "graces": {
+        "r|0@2026-11-25|0": 1795575539000
+      },
+      "now": 1795575600000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
       "current_key": "android:a"
     },
-    "expect": {"verdict": {"type": "block", "rule_id": "r", "kind": "daily_total"}, "new_graces": [], "next_wakeup": null}
+    "expect": {
+      "verdict": {
+        "type": "block",
+        "rule_id": "r",
+        "kind": "daily_total"
+      },
+      "new_graces": [],
+      "next_wakeup": 1795633200000
+    }
   },
   {
     "name": "unlock_allows_until_it_ends",
     "input": {
-      "rules": [{"id": "r", "name": "r", "targets": [{"label": "a", "keys": ["android:a"]}], "limit": {"type": "daily_total", "seconds": 0}, "enabled": true}],
-      "overrides": [], "unlock_until": 1795576500000, "last_unlock_end": 0,
+      "rules": [
+        {
+          "id": "r",
+          "name": "r",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "enabled": true,
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 0
+            }
+          ]
+        }
+      ],
+      "overrides": [],
+      "unlock_until": 1795576500000,
+      "last_unlock_end": 0,
       "segments": [],
-      "graces": {}, "now": 1795575600000,
-      "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
+      "graces": {},
+      "now": 1795575600000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
       "current_key": "android:a"
     },
-    "expect": {"verdict": {"type": "allow"}, "new_graces": [], "next_wakeup": 1795576500000}
+    "expect": {
+      "verdict": {
+        "type": "allow"
+      },
+      "new_graces": [],
+      "next_wakeup": 1795576500000
+    }
   },
   {
     "name": "after_unlock_a_new_grace_is_given",
     "input": {
-      "rules": [{"id": "r", "name": "r", "targets": [{"label": "a", "keys": ["android:a"]}], "limit": {"type": "daily_total", "seconds": 0}, "enabled": true}],
-      "overrides": [], "unlock_until": 1795576500000, "last_unlock_end": 1795576500000,
+      "rules": [
+        {
+          "id": "r",
+          "name": "r",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "enabled": true,
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 0
+            }
+          ]
+        }
+      ],
+      "overrides": [],
+      "unlock_until": 1795576500000,
+      "last_unlock_end": 1795576500000,
       "segments": [],
-      "graces": {"r|2026-11-25|0": 1795575000000}, "now": 1795576500001,
-      "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
+      "graces": {
+        "r|0@2026-11-25|0": 1795575000000
+      },
+      "now": 1795576500001,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
       "current_key": "android:a"
     },
-    "expect": {"verdict": {"type": "grace", "rule_id": "r", "until": 1795576560001}, "new_graces": [["r|2026-11-25|1795576500000", 1795576500001]], "next_wakeup": 1795576560001}
+    "expect": {
+      "verdict": {
+        "type": "grace",
+        "rule_id": "r",
+        "until": 1795576560001
+      },
+      "new_graces": [
+        [
+          "r|0@2026-11-25|1795576500000",
+          1795576500001
+        ]
+      ],
+      "next_wakeup": 1795576560001
+    }
   },
   {
     "name": "window_across_midnight_at_23",
     "input": {
-      "rules": [{"id": "w", "name": "w", "targets": [{"label": "a", "keys": ["android:a"]}], "limit": {"type": "window", "days": 127, "start_min": 1320, "end_min": 360}, "enabled": true}],
-      "overrides": [], "unlock_until": 0, "last_unlock_end": 0,
+      "rules": [
+        {
+          "id": "w",
+          "name": "w",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "enabled": true,
+          "limits": [
+            {
+              "type": "window",
+              "days": 127,
+              "start_min": 1320,
+              "end_min": 360
+            }
+          ]
+        }
+      ],
+      "overrides": [],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
       "segments": [],
-      "graces": {}, "now": 1795615200000,
-      "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
+      "graces": {},
+      "now": 1795615200000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
       "current_key": "android:a"
     },
-    "expect": {"verdict": {"type": "grace", "rule_id": "w", "until": 1795615260000}, "new_graces": [["w|2026-11-25|0", 1795615200000]], "next_wakeup": 1795615260000}
+    "expect": {
+      "verdict": {
+        "type": "grace",
+        "rule_id": "w",
+        "until": 1795615260000
+      },
+      "new_graces": [
+        [
+          "w|0@2026-11-25|0",
+          1795615200000
+        ]
+      ],
+      "next_wakeup": 1795615260000
+    }
   },
   {
     "name": "window_after_midnight_keeps_the_same_occurrence",
     "input": {
-      "rules": [{"id": "w", "name": "w", "targets": [{"label": "a", "keys": ["android:a"]}], "limit": {"type": "window", "days": 127, "start_min": 1320, "end_min": 360}, "enabled": true}],
-      "overrides": [], "unlock_until": 0, "last_unlock_end": 0,
+      "rules": [
+        {
+          "id": "w",
+          "name": "w",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "enabled": true,
+          "limits": [
+            {
+              "type": "window",
+              "days": 127,
+              "start_min": 1320,
+              "end_min": 360
+            }
+          ]
+        }
+      ],
+      "overrides": [],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
       "segments": [],
-      "graces": {"w|2026-11-25|0": 1795612200000}, "now": 1795622400000,
-      "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
+      "graces": {
+        "w|0@2026-11-25|0": 1795612200000
+      },
+      "now": 1795622400000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
       "current_key": "android:a"
     },
-    "expect": {"verdict": {"type": "block", "rule_id": "w", "kind": "window"}, "new_graces": [], "next_wakeup": null}
+    "expect": {
+      "verdict": {
+        "type": "block",
+        "rule_id": "w",
+        "kind": "window"
+      },
+      "new_graces": [],
+      "next_wakeup": null
+    }
   },
   {
     "name": "window_not_active_schedules_its_start",
     "input": {
-      "rules": [{"id": "w", "name": "w", "targets": [{"label": "a", "keys": ["android:a"]}], "limit": {"type": "window", "days": 127, "start_min": 1320, "end_min": 360}, "enabled": true}],
-      "overrides": [], "unlock_until": 0, "last_unlock_end": 0,
+      "rules": [
+        {
+          "id": "w",
+          "name": "w",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "enabled": true,
+          "limits": [
+            {
+              "type": "window",
+              "days": 127,
+              "start_min": 1320,
+              "end_min": 360
+            }
+          ]
+        }
+      ],
+      "overrides": [],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
       "segments": [],
-      "graces": {}, "now": 1795575600000,
-      "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
+      "graces": {},
+      "now": 1795575600000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
       "current_key": "android:a"
     },
-    "expect": {"verdict": {"type": "allow"}, "new_graces": [], "next_wakeup": 1795611600000}
+    "expect": {
+      "verdict": {
+        "type": "allow"
+      },
+      "new_graces": [],
+      "next_wakeup": 1795611600000
+    }
   },
   {
     "name": "override_for_the_logical_day_skips_rules",
     "input": {
-      "rules": [{"id": "r", "name": "r", "targets": [{"label": "a", "keys": ["android:a"]}], "limit": {"type": "daily_total", "seconds": 0}, "enabled": true}],
-      "overrides": [{"id": "o", "date": "2026-11-25", "rule_id": null}], "unlock_until": 0, "last_unlock_end": 0,
+      "rules": [
+        {
+          "id": "r",
+          "name": "r",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "enabled": true,
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 0
+            }
+          ]
+        }
+      ],
+      "overrides": [
+        {
+          "id": "o",
+          "date": "2026-11-25",
+          "rule_id": null
+        }
+      ],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
       "segments": [],
-      "graces": {}, "now": 1795575600000,
-      "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
+      "graces": {},
+      "now": 1795575600000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
       "current_key": "android:a"
     },
-    "expect": {"verdict": {"type": "allow"}, "new_graces": [], "next_wakeup": null}
+    "expect": {
+      "verdict": {
+        "type": "allow"
+      },
+      "new_graces": [],
+      "next_wakeup": null
+    }
   },
   {
     "name": "override_for_another_rule_does_not_apply",
     "input": {
-      "rules": [{"id": "r", "name": "r", "targets": [{"label": "a", "keys": ["android:a"]}], "limit": {"type": "daily_total", "seconds": 0}, "enabled": true}],
-      "overrides": [{"id": "o", "date": "2026-11-25", "rule_id": "other"}], "unlock_until": 0, "last_unlock_end": 0,
+      "rules": [
+        {
+          "id": "r",
+          "name": "r",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "enabled": true,
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 0
+            }
+          ]
+        }
+      ],
+      "overrides": [
+        {
+          "id": "o",
+          "date": "2026-11-25",
+          "rule_id": "other"
+        }
+      ],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
       "segments": [],
-      "graces": {}, "now": 1795575600000,
-      "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
+      "graces": {},
+      "now": 1795575600000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
       "current_key": "android:a"
     },
-    "expect": {"verdict": {"type": "grace", "rule_id": "r", "until": 1795575660000}, "new_graces": [["r|2026-11-25|0", 1795575600000]], "next_wakeup": 1795575660000}
+    "expect": {
+      "verdict": {
+        "type": "grace",
+        "rule_id": "r",
+        "until": 1795575660000
+      },
+      "new_graces": [
+        [
+          "r|0@2026-11-25|0",
+          1795575600000
+        ]
+      ],
+      "next_wakeup": 1795575660000
+    }
   },
   {
     "name": "overlapping_devices_are_counted_once",
     "input": {
-      "rules": [{"id": "r", "name": "r", "targets": [{"label": "a", "keys": ["android:a"]}], "limit": {"type": "daily_total", "seconds": 120}, "enabled": true}],
-      "overrides": [], "unlock_until": 0, "last_unlock_end": 0,
-      "segments": [
-        {"key": "android:a", "start": 1795575510000, "end": 1795575570000},
-        {"key": "android:a", "start": 1795575540000, "end": 1795575600000}
+      "rules": [
+        {
+          "id": "r",
+          "name": "r",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "enabled": true,
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 120
+            }
+          ]
+        }
       ],
-      "graces": {}, "now": 1795575600000,
-      "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
+      "overrides": [],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
+      "segments": [
+        {
+          "key": "android:a",
+          "start": 1795575510000,
+          "end": 1795575570000
+        },
+        {
+          "key": "android:a",
+          "start": 1795575540000,
+          "end": 1795575600000
+        }
+      ],
+      "graces": {},
+      "now": 1795575600000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
       "current_key": "android:a"
     },
-    "expect": {"verdict": {"type": "allow"}, "new_graces": [], "next_wakeup": 1795575630000}
+    "expect": {
+      "verdict": {
+        "type": "allow"
+      },
+      "new_graces": [],
+      "next_wakeup": 1795575630000
+    }
   },
   {
     "name": "domain_target_matches_subdomain",
     "input": {
-      "rules": [{"id": "r", "name": "r", "targets": [{"label": "ex", "keys": ["domain:example.com"]}], "limit": {"type": "daily_total", "seconds": 0}, "enabled": true}],
-      "overrides": [], "unlock_until": 0, "last_unlock_end": 0,
+      "rules": [
+        {
+          "id": "r",
+          "name": "r",
+          "targets": [
+            {
+              "label": "ex",
+              "keys": [
+                "domain:example.com"
+              ]
+            }
+          ],
+          "enabled": true,
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 0
+            }
+          ]
+        }
+      ],
+      "overrides": [],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
       "segments": [],
-      "graces": {}, "now": 1795575600000,
-      "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
+      "graces": {},
+      "now": 1795575600000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
       "current_key": "domain:www.example.com"
     },
-    "expect": {"verdict": {"type": "grace", "rule_id": "r", "until": 1795575660000}, "new_graces": [["r|2026-11-25|0", 1795575600000]], "next_wakeup": 1795575660000}
+    "expect": {
+      "verdict": {
+        "type": "grace",
+        "rule_id": "r",
+        "until": 1795575660000
+      },
+      "new_graces": [
+        [
+          "r|0@2026-11-25|0",
+          1795575600000
+        ]
+      ],
+      "next_wakeup": 1795575660000
+    }
   },
   {
     "name": "disabled_rule_and_unrelated_app_are_allowed",
     "input": {
       "rules": [
-        {"id": "r", "name": "r", "targets": [{"label": "a", "keys": ["android:a"]}], "limit": {"type": "daily_total", "seconds": 0}, "enabled": false},
-        {"id": "s", "name": "s", "targets": [{"label": "b", "keys": ["android:b"]}], "limit": {"type": "daily_total", "seconds": 0}, "enabled": true}
+        {
+          "id": "r",
+          "name": "r",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "enabled": false,
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 0
+            }
+          ]
+        },
+        {
+          "id": "s",
+          "name": "s",
+          "targets": [
+            {
+              "label": "b",
+              "keys": [
+                "android:b"
+              ]
+            }
+          ],
+          "enabled": true,
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 0
+            }
+          ]
+        }
       ],
-      "overrides": [], "unlock_until": 0, "last_unlock_end": 0,
+      "overrides": [],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
       "segments": [],
-      "graces": {}, "now": 1795575600000,
-      "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
+      "graces": {},
+      "now": 1795575600000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
       "current_key": "android:a"
     },
-    "expect": {"verdict": {"type": "allow"}, "new_graces": [], "next_wakeup": null}
+    "expect": {
+      "verdict": {
+        "type": "allow"
+      },
+      "new_graces": [],
+      "next_wakeup": null
+    }
   },
   {
     "name": "block_wins_over_grace_and_new_grace_is_still_recorded",
     "input": {
       "rules": [
-        {"id": "r1", "name": "r1", "targets": [{"label": "a", "keys": ["android:a"]}], "limit": {"type": "daily_total", "seconds": 0}, "enabled": true},
-        {"id": "r2", "name": "r2", "targets": [{"label": "a", "keys": ["android:a"]}], "limit": {"type": "daily_total", "seconds": 0}, "enabled": true}
+        {
+          "id": "r1",
+          "name": "r1",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "enabled": true,
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 0
+            }
+          ]
+        },
+        {
+          "id": "r2",
+          "name": "r2",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "enabled": true,
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 0
+            }
+          ]
+        }
       ],
-      "overrides": [], "unlock_until": 0, "last_unlock_end": 0,
+      "overrides": [],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
       "segments": [],
-      "graces": {"r1|2026-11-25|0": 1795575500000}, "now": 1795575600000,
-      "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
+      "graces": {
+        "r1|0@2026-11-25|0": 1795575500000
+      },
+      "now": 1795575600000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
       "current_key": "android:a"
     },
-    "expect": {"verdict": {"type": "block", "rule_id": "r1", "kind": "daily_total"}, "new_graces": [["r2|2026-11-25|0", 1795575600000]], "next_wakeup": 1795575660000}
+    "expect": {
+      "verdict": {
+        "type": "block",
+        "rule_id": "r1",
+        "kind": "daily_total"
+      },
+      "new_graces": [
+        [
+          "r2|0@2026-11-25|0",
+          1795575600000
+        ]
+      ],
+      "next_wakeup": 1795575660000
+    }
   },
   {
     "name": "no_current_app_is_allowed",
     "input": {
-      "rules": [{"id": "r", "name": "r", "targets": [{"label": "a", "keys": ["android:a"]}], "limit": {"type": "daily_total", "seconds": 0}, "enabled": true}],
-      "overrides": [], "unlock_until": 0, "last_unlock_end": 0,
+      "rules": [
+        {
+          "id": "r",
+          "name": "r",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "enabled": true,
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 0
+            }
+          ]
+        }
+      ],
+      "overrides": [],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
       "segments": [],
-      "graces": {}, "now": 1795575600000,
-      "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
+      "graces": {},
+      "now": 1795575600000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
       "current_key": null
     },
-    "expect": {"verdict": {"type": "allow"}, "new_graces": [], "next_wakeup": null}
+    "expect": {
+      "verdict": {
+        "type": "allow"
+      },
+      "new_graces": [],
+      "next_wakeup": null
+    }
+  },
+  {
+    "name": "multi_limit_weekday_window_starts_grace",
+    "input": {
+      "rules": [
+        {
+          "id": "r",
+          "name": "r",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 3600
+            },
+            {
+              "type": "window",
+              "days": 127,
+              "start_min": 360,
+              "end_min": 420
+            },
+            {
+              "type": "window",
+              "days": 31,
+              "start_min": 900,
+              "end_min": 1380
+            }
+          ],
+          "enabled": true
+        }
+      ],
+      "overrides": [],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
+      "segments": [],
+      "graces": {},
+      "now": 1795590000000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
+      "current_key": "android:a"
+    },
+    "expect": {
+      "verdict": {
+        "type": "grace",
+        "rule_id": "r",
+        "until": 1795590060000
+      },
+      "new_graces": [
+        [
+          "r|2@2026-11-25|0",
+          1795590000000
+        ]
+      ],
+      "next_wakeup": 1795590060000
+    }
+  },
+  {
+    "name": "multi_limit_weekday_window_skips_weekend",
+    "input": {
+      "rules": [
+        {
+          "id": "r",
+          "name": "r",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 3600
+            },
+            {
+              "type": "window",
+              "days": 127,
+              "start_min": 360,
+              "end_min": 420
+            },
+            {
+              "type": "window",
+              "days": 31,
+              "start_min": 900,
+              "end_min": 1380
+            }
+          ],
+          "enabled": true
+        }
+      ],
+      "overrides": [],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
+      "segments": [],
+      "graces": {},
+      "now": 1795849200000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
+      "current_key": "android:a"
+    },
+    "expect": {
+      "verdict": {
+        "type": "allow"
+      },
+      "new_graces": [],
+      "next_wakeup": 1795852800000
+    }
+  },
+  {
+    "name": "multi_limit_total_reached_while_windows_are_inactive",
+    "input": {
+      "rules": [
+        {
+          "id": "r",
+          "name": "r",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 127,
+              "seconds": 3600
+            },
+            {
+              "type": "window",
+              "days": 127,
+              "start_min": 360,
+              "end_min": 420
+            },
+            {
+              "type": "window",
+              "days": 31,
+              "start_min": 900,
+              "end_min": 1380
+            }
+          ],
+          "enabled": true
+        }
+      ],
+      "overrides": [],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
+      "segments": [
+        {
+          "key": "android:a",
+          "start": 1795572000000,
+          "end": 1795575600000
+        }
+      ],
+      "graces": {},
+      "now": 1795575600000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
+      "current_key": "android:a"
+    },
+    "expect": {
+      "verdict": {
+        "type": "grace",
+        "rule_id": "r",
+        "until": 1795575660000
+      },
+      "new_graces": [
+        [
+          "r|0@2026-11-25|0",
+          1795575600000
+        ]
+      ],
+      "next_wakeup": 1795575660000
+    }
+  },
+  {
+    "name": "daily_total_by_weekday_weekend_limit",
+    "input": {
+      "rules": [
+        {
+          "id": "r",
+          "name": "r",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 31,
+              "seconds": 7200
+            },
+            {
+              "type": "daily_total",
+              "days": 96,
+              "seconds": 600
+            }
+          ],
+          "enabled": true
+        }
+      ],
+      "overrides": [],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
+      "segments": [
+        {
+          "key": "android:a",
+          "start": 1795833840000,
+          "end": 1795834800000
+        }
+      ],
+      "graces": {},
+      "now": 1795834800000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
+      "current_key": "android:a"
+    },
+    "expect": {
+      "verdict": {
+        "type": "grace",
+        "rule_id": "r",
+        "until": 1795834860000
+      },
+      "new_graces": [
+        [
+          "r|1@2026-11-28|0",
+          1795834800000
+        ]
+      ],
+      "next_wakeup": 1795834860000
+    }
+  },
+  {
+    "name": "daily_total_by_weekday_weekday_limit",
+    "input": {
+      "rules": [
+        {
+          "id": "r",
+          "name": "r",
+          "targets": [
+            {
+              "label": "a",
+              "keys": [
+                "android:a"
+              ]
+            }
+          ],
+          "limits": [
+            {
+              "type": "daily_total",
+              "days": 31,
+              "seconds": 7200
+            },
+            {
+              "type": "daily_total",
+              "days": 96,
+              "seconds": 600
+            }
+          ],
+          "enabled": true
+        }
+      ],
+      "overrides": [],
+      "unlock_until": 0,
+      "last_unlock_end": 0,
+      "segments": [
+        {
+          "key": "android:a",
+          "start": 1795574640000,
+          "end": 1795575600000
+        }
+      ],
+      "graces": {},
+      "now": 1795575600000,
+      "clock": {
+        "utc_offset_min": 540,
+        "day_boundary_min": 240
+      },
+      "current_key": "android:a"
+    },
+    "expect": {
+      "verdict": {
+        "type": "allow"
+      },
+      "new_graces": [],
+      "next_wakeup": 1795581840000
+    }
   }
 ]

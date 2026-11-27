@@ -7,12 +7,15 @@ use sqlx::SqlitePool;
 use crate::config::Config;
 use crate::hub::Hub;
 use crate::tailscale::Tailscale;
+use crate::update::Restart;
 
 pub struct AppState {
     pub config: Config,
     pub pool: SqlitePool,
     pub hub: Hub,
     pub tailscale: Tailscale,
+    /// 自動更新で入れ替えたあとの、再起動の要求。
+    pub restart: Restart,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -25,6 +28,7 @@ impl AppState {
             pool,
             hub: Hub::default(),
             tailscale,
+            restart: Restart::default(),
         }
     }
 }

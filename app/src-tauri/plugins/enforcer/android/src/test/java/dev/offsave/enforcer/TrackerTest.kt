@@ -15,7 +15,7 @@ class TrackerTest {
   ) = """
     {"server_time": $serverTime, "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
      "rules": [{"id": "r", "name": "ゲーム", "targets": [{"label": "g", "keys": ["android:g"]}],
-                "limit": {"type": "daily_total", "seconds": $seconds}, "enabled": true}],
+                "limits": [{"type": "daily_total", "seconds": $seconds}], "enabled": true}],
      "overrides": [], "unlock_until": $unlockUntil, "last_unlock_end": 0, "unlock_minutes": 15,
      "others": $others}
   """.trimIndent()
@@ -83,7 +83,7 @@ class TrackerTest {
   private fun domainPolicy(seconds: Long) = """
     {"server_time": $t0, "clock": {"utc_offset_min": 540, "day_boundary_min": 240},
      "rules": [{"id": "d", "name": "動画", "targets": [{"label": "yt", "keys": ["domain:example.com"]}],
-                "limit": {"type": "daily_total", "seconds": $seconds}, "enabled": true}],
+                "limits": [{"type": "daily_total", "seconds": $seconds}], "enabled": true}],
      "overrides": [], "unlock_until": 0, "last_unlock_end": 0, "unlock_minutes": 15, "others": []}
   """.trimIndent()
 

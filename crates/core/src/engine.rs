@@ -3,8 +3,11 @@
 //! 入力は「ルール・オーバーライド・一時解除・今日の利用区間（全デバイス分）・今開いているもの」で、
 //! 出力は「許可 / 猶予 / ブロック」と、次に判定が変わりうる時刻。副作用はない（猶予の記録は戻り値で返す）。
 //!
+//! ルールは複数の制限（1 日の合計・使えない時間帯。どちらも曜日を指定できる）を持ち、どれか 1 つでも当たっていれば使えない。
+//!
 //! 猶予: 制限に達した最初の判定で 1 分間だけ使える。同じ「制限到達イベント」では二度与えない。
-//! 制限到達イベント = ルール × 発生（1 日の上限は論理日、時間帯はその時間帯の開始日）× 直近の一時解除の終了時刻。
+//! 制限到達イベント = ルール × 制限（ルール内の番号）× 発生（1 日の上限は論理日、時間帯はその時間帯の開始日）× 直近の一時解除の終了時刻。
+//! 猶予のキーは `{ルール ID}|{制限の番号}@{発生}|{一時解除の終了}`。
 //! 時間帯の中でアプリを開き直しても猶予は戻らない。一時解除が終わって再び制限に達したときは新しいイベントになる。
 //!
 //! Android の Kotlin 版は、`tests/vectors/engine.json` の同じデータで試験して、この実装と一致させる。
@@ -150,55 +153,69 @@ pub fn decide(input: &Input) -> Decision {
         .filter(|r| r.enabled && r.matches(key))
         .filter(|r| !overridden(r, &input.overrides, &day.date))
     {
-        // 制限に達していれば、その発生の識別子
-        let (occurrence, kind) = match rule.limit {
-            Limit::DailyTotal { seconds } => {
-                let used = used_ms(rule, &input.segments, day.start, day.end);
-                let limit = seconds as Ms * 1000;
-                if used >= limit {
-                    (Some(day.date.clone()), BlockKind::DailyTotal)
-                } else {
-                    wake_at(now + (limit - used));
-                    (None, BlockKind::DailyTotal)
+        // 利用時間は、ルールのどの制限でも同じ（必要になったときだけ数える）
+        let mut used: Option<Ms> = None;
+        for (index, limit) in rule.limits.iter().enumerate() {
+            // 制限に達していれば、その発生の識別子
+            let (occurrence, kind) = match *limit {
+                Limit::DailyTotal { days, seconds } => {
+                    // 論理日が変わると合計も曜日も変わる
+                    wake_at(day.end);
+                    if days & (1 << day.weekday) == 0 {
+                        (None, BlockKind::DailyTotal)
+                    } else {
+                        let used = *used
+                            .get_or_insert_with(|| used_ms(rule, &input.segments, day.start, day.end));
+                        let max = seconds as Ms * 1000;
+                        if used >= max {
+                            (Some(day.date.clone()), BlockKind::DailyTotal)
+                        } else {
+                            wake_at(now + (max - used));
+                            (None, BlockKind::DailyTotal)
+                        }
+                    }
                 }
-            }
-            Limit::Window {
-                days,
-                start_min,
-                end_min,
-            } => {
-                let occ = window_occurrence(days, start_min, end_min, now, &input.clock);
-                if occ.is_none()
-                    && let Some(t) = next_window_start(days, start_min, now, &input.clock)
-                {
-                    wake_at(t);
+                Limit::Window {
+                    days,
+                    start_min,
+                    end_min,
+                } => {
+                    let occ = window_occurrence(days, start_min, end_min, now, &input.clock);
+                    if occ.is_none()
+                        && let Some(t) = next_window_start(days, start_min, now, &input.clock)
+                    {
+                        wake_at(t);
+                    }
+                    (occ, BlockKind::Window)
                 }
-                (occ, BlockKind::Window)
-            }
-        };
-        let Some(occurrence) = occurrence else {
-            continue;
-        };
+            };
+            let Some(occurrence) = occurrence else {
+                continue;
+            };
 
-        let grace_key = format!("{}|{}|{}", rule.id, occurrence, input.last_unlock_end);
-        let started = match input.graces.get(&grace_key) {
-            Some(t) => *t,
-            None => {
-                decision.new_graces.push((grace_key, now));
-                now
+            let grace_key = format!(
+                "{}|{}@{}|{}",
+                rule.id, index, occurrence, input.last_unlock_end
+            );
+            let started = match input.graces.get(&grace_key) {
+                Some(t) => *t,
+                None => {
+                    decision.new_graces.push((grace_key, now));
+                    now
+                }
+            };
+            let until = started + GRACE_MS;
+            if now < until {
+                wake_at(until);
+                if grace.as_ref().is_none_or(|(_, u)| until < *u) {
+                    grace = Some((rule.id.clone(), until));
+                }
+            } else if block.is_none() {
+                block = Some(Verdict::Block {
+                    rule_id: rule.id.clone(),
+                    kind,
+                });
             }
-        };
-        let until = started + GRACE_MS;
-        if now < until {
-            wake_at(until);
-            if grace.as_ref().is_none_or(|(_, u)| until < *u) {
-                grace = Some((rule.id.clone(), until));
-            }
-        } else if block.is_none() {
-            block = Some(Verdict::Block {
-                rule_id: rule.id.clone(),
-                kind,
-            });
         }
     }
 
@@ -214,10 +231,21 @@ pub fn decide(input: &Input) -> Decision {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Target;
+    use crate::model::{ALL_DAYS, Target};
     use crate::time::parse_date;
 
+    fn total(seconds: u32) -> Limit {
+        Limit::DailyTotal {
+            days: ALL_DAYS,
+            seconds,
+        }
+    }
+
     fn rule(id: &str, key: &str, limit: Limit) -> Rule {
+        rule_with(id, key, vec![limit])
+    }
+
+    fn rule_with(id: &str, key: &str, limits: Vec<Limit>) -> Rule {
         Rule {
             id: id.into(),
             name: id.into(),
@@ -225,7 +253,7 @@ mod tests {
                 label: id.into(),
                 keys: vec![key.into()],
             }],
-            limit,
+            limits,
             enabled: true,
         }
     }
@@ -253,7 +281,7 @@ mod tests {
     fn under_limit_allows_and_schedules_wakeup() {
         let now = jst(12, 0);
         let mut i = input(
-            vec![rule("r", "android:a", Limit::DailyTotal { seconds: 600 })],
+            vec![rule("r", "android:a", total(600))],
             now,
             "android:a",
         );
@@ -271,7 +299,7 @@ mod tests {
     fn exceeding_starts_grace_then_blocks() {
         let now = jst(12, 0);
         let mut i = input(
-            vec![rule("r", "android:a", Limit::DailyTotal { seconds: 60 })],
+            vec![rule("r", "android:a", total(60))],
             now,
             "android:a",
         );
@@ -307,7 +335,7 @@ mod tests {
     fn unlock_allows_and_new_event_gets_new_grace() {
         let now = jst(12, 0);
         let mut i = input(
-            vec![rule("r", "android:a", Limit::DailyTotal { seconds: 0 })],
+            vec![rule("r", "android:a", total(0))],
             now,
             "android:a",
         );
@@ -366,7 +394,7 @@ mod tests {
     #[test]
     fn override_skips_rule_for_that_logical_day() {
         let mut i = input(
-            vec![rule("r", "android:a", Limit::DailyTotal { seconds: 0 })],
+            vec![rule("r", "android:a", total(0))],
             jst(12, 0),
             "android:a",
         );
@@ -384,7 +412,7 @@ mod tests {
     fn other_devices_count_without_double_counting() {
         let now = jst(12, 0);
         let mut i = input(
-            vec![rule("r", "android:a", Limit::DailyTotal { seconds: 120 })],
+            vec![rule("r", "android:a", total(120))],
             now,
             "android:a",
         );
@@ -410,10 +438,129 @@ mod tests {
         assert!(matches!(decide(&i).verdict, Verdict::Grace { .. }));
     }
 
+    /// JST の指定した日の `h:m`。
+    fn jst_on(date: &str, h: i64, m: i64) -> Ms {
+        parse_date(date).unwrap() * DAY_MS + (h * 60 + m) * MIN_MS - 540 * MIN_MS
+    }
+
+    const WEEKDAYS: u8 = 0b001_1111;
+    const WEEKEND: u8 = 0b110_0000;
+
+    /// 例: 合計 1 時間・毎日 6:00–7:00 は禁止・平日は 15:00–23:00 も禁止。
+    fn combined_rule() -> Rule {
+        rule_with(
+            "r",
+            "android:a",
+            vec![
+                total(3600),
+                Limit::Window {
+                    days: ALL_DAYS,
+                    start_min: 360,
+                    end_min: 420,
+                },
+                Limit::Window {
+                    days: WEEKDAYS,
+                    start_min: 900,
+                    end_min: 1380,
+                },
+            ],
+        )
+    }
+
+    #[test]
+    fn any_one_of_several_limits_blocks() {
+        // 2026-11-25 は水曜日
+        let at = |h, m| input(vec![combined_rule()], jst(h, m), "android:a");
+        // 毎日の禁止の時間帯（6:00–7:00）
+        assert!(matches!(decide(&at(6, 30)).verdict, Verdict::Grace { .. }));
+        // どれにも当たらない時間。次に変わるのは、合計が尽きる 13:00
+        let d = decide(&at(12, 0));
+        assert_eq!(d.verdict, Verdict::Allow);
+        assert_eq!(d.next_wakeup, Some(jst(13, 0)));
+        // 平日の禁止の時間帯（15:00–23:00）
+        assert!(matches!(decide(&at(16, 0)).verdict, Verdict::Grace { .. }));
+        // 23:00 を過ぎると、また使える
+        assert_eq!(decide(&at(23, 30)).verdict, Verdict::Allow);
+    }
+
+    #[test]
+    fn weekday_only_window_does_not_apply_on_weekend() {
+        // 2026-11-28 は土曜日
+        let i = input(vec![combined_rule()], jst_on("2026-11-28", 16, 0), "android:a");
+        assert_eq!(decide(&i).verdict, Verdict::Allow);
+        // 毎日の禁止（6:00–7:00）は土曜日にも効く
+        let i = input(vec![combined_rule()], jst_on("2026-11-28", 6, 30), "android:a");
+        assert!(matches!(decide(&i).verdict, Verdict::Grace { .. }));
+    }
+
+    #[test]
+    fn each_limit_gets_its_own_grace() {
+        let now = jst(16, 0);
+        let mut i = input(vec![combined_rule()], now, "android:a");
+        i.segments = vec![Segment {
+            key: "android:a".into(),
+            start: now - 3_600_000,
+            end: now,
+        }];
+        // 合計（番号 0）と平日の禁止（番号 2）に同時に当たる。猶予はそれぞれ 1 回
+        let d = decide(&i);
+        let keys: Vec<_> = d.new_graces.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, vec!["r|0@2026-11-25|0", "r|2@2026-11-25|0"]);
+        i.graces.extend(d.new_graces);
+        // 猶予が過ぎたら、ブロック（どちらの猶予も新しく始まらない）
+        i.now = now + GRACE_MS + 1;
+        let d = decide(&i);
+        assert!(matches!(d.verdict, Verdict::Block { .. }));
+        assert!(d.new_graces.is_empty());
+    }
+
+    #[test]
+    fn daily_total_can_differ_between_weekdays_and_weekend() {
+        let r = rule_with(
+            "r",
+            "android:a",
+            vec![
+                Limit::DailyTotal {
+                    days: WEEKDAYS,
+                    seconds: 7200,
+                },
+                Limit::DailyTotal {
+                    days: WEEKEND,
+                    seconds: 600,
+                },
+            ],
+        );
+        for (date, blocked) in [("2026-11-25", false), ("2026-11-28", true)] {
+            let now = jst_on(date, 12, 0);
+            let mut i = input(vec![r.clone()], now, "android:a");
+            // 16 分使った（水曜は 2 時間まで・土曜は 10 分まで）
+            i.segments = vec![Segment {
+                key: "android:a".into(),
+                start: now - 960_000,
+                end: now,
+            }];
+            let d = decide(&i);
+            assert_eq!(matches!(d.verdict, Verdict::Grace { .. }), blocked, "{date}");
+        }
+    }
+
+    #[test]
+    fn day_change_is_a_wakeup_for_daily_totals() {
+        // 4:00 の境界。合計が尽きていてブロック中でも、論理日が変わる時刻に判定し直す
+        let now = jst(12, 0);
+        let mut i = input(vec![rule("r", "android:a", total(0))], now, "android:a");
+        let d = decide(&i);
+        i.graces.extend(d.new_graces);
+        i.now = now + GRACE_MS + 1;
+        let d = decide(&i);
+        assert!(matches!(d.verdict, Verdict::Block { .. }));
+        assert_eq!(d.next_wakeup, Some(jst_on("2026-11-26", 4, 0)));
+    }
+
     #[test]
     fn unrelated_app_is_allowed() {
         let i = input(
-            vec![rule("r", "android:a", Limit::DailyTotal { seconds: 0 })],
+            vec![rule("r", "android:a", total(0))],
             jst(12, 0),
             "android:b",
         );

@@ -51,7 +51,13 @@ class Overlay(private val service: AccessibilityService, private val agent: Agen
       }
       is Verdict.Block -> {
         hideBanner()
-        showBlock(ruleName ?: "制限")
+        val name = ruleName ?: "制限"
+        showBlock(
+          when (verdict.kind) {
+            BlockKind.WINDOW -> "「$name」の使えない時間帯です。"
+            BlockKind.DAILY_TOTAL -> "「$name」の 1 日の上限に達しました。"
+          },
+        )
       }
     }
   }
@@ -120,6 +126,7 @@ class Overlay(private val service: AccessibilityService, private val agent: Agen
 
   // ---- ブロックの全画面 ----
 
+  /** `rule` は、理由の文（「「ゲーム」の 1 日の上限に達しました。」など）。 */
   private fun showBlock(rule: String) {
     block?.let {
       it.setRule(rule)
@@ -255,7 +262,7 @@ private class BlockView(
   private fun showIntro() {
     reset(
       title("利用制限中"),
-      body("「$rule」の制限により、このアプリは今は使えません。"),
+      body("${rule}このアプリは今は使えません。"),
       button("ホームに戻る", primary = true) { agent.goHome() },
       button("制限を一時的に解除する…", primary = false) { showReason() },
     )

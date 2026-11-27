@@ -1,3 +1,4 @@
+import { getItem, setItem } from '@3pino/app-kit-web/core/storage';
 import { Api } from './api';
 
 /** このデバイスの接続情報（登録済みなら入っている）。localStorage に保存する。 */
@@ -15,7 +16,7 @@ const KEY = 'offsave.session';
 
 function load(): Saved | null {
   try {
-    const v = localStorage.getItem(KEY);
+    const v = getItem(KEY);
     return v ? (JSON.parse(v) as Saved) : null;
   } catch {
     return null;
@@ -30,12 +31,12 @@ class Session {
   }
 
   save(s: Saved) {
-    localStorage.setItem(KEY, JSON.stringify(s));
+    setItem(KEY, JSON.stringify(s));
     this.saved = s;
   }
 
   clear() {
-    localStorage.removeItem(KEY);
+    setItem(KEY, null);
     this.saved = null;
   }
 }
