@@ -28,7 +28,9 @@ Android ── WebSocket（60 秒ごとのハートビート）──▶ サー�
 
 ## ビルド済みのファイルを使う
 
-[Actions](https://github.com/3pino/offsave/actions/workflows/ci.yml) の最新の成功した実行の「Artifacts」から取れます（GitHub にログインが必要）。
+[Releases](https://github.com/3pino/offsave/releases) に、タグ（`v*`）ごとのファイルがあります。最新の main のビルドは、[Actions](https://github.com/3pino/offsave/actions/workflows/ci.yml) の成功した実行の「Artifacts」から取れます（GitHub にログインが必要）。
+
+リリースの作り方: `git tag -a v0.2.0 -m "..." && git push origin v0.2.0`（CI が成功したら、自動で Release ができる）。
 
 | ファイル | 内容 |
 |---|---|
