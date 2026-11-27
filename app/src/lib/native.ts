@@ -19,6 +19,7 @@ export const native = {
   }) => call<NativeStatus>('configure', a),
   clear: () => call<NativeStatus>('clear'),
   openAccessibilitySettings: () => call<void>('open_accessibility_settings'),
+  openUsageAccessSettings: () => call<void>('open_usage_access_settings'),
   requestDeviceAdmin: () => call<void>('request_device_admin'),
   requestBatteryExemption: () => call<void>('request_battery_exemption'),
   requestNotifications: () => call<void>('request_notifications'),

@@ -51,6 +51,7 @@ export const EVENT_LABEL: Record<EventKind, string> = {
   rule_changed: 'ルールが変わりました',
   unsupported_browser: '対応していないブラウザを使いました',
   clock_skew: '時計がずれています',
+  protection_paused: '保護を一時停止・再開しました',
 };
 
 /** 警告として強調するイベント */

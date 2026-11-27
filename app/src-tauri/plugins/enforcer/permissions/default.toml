@@ -7,6 +7,7 @@ permissions = [
   "allow-clear",
   "allow-status",
   "allow-open-accessibility-settings",
+  "allow-open-usage-access-settings",
   "allow-request-device-admin",
   "allow-request-battery-exemption",
   "allow-request-notifications",

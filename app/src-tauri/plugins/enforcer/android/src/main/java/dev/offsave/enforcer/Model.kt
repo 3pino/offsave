@@ -47,6 +47,8 @@ data class Policy(
   val lastUnlockEnd: Long,
   val unlockMinutes: Int,
   val others: List<Segment>,
+  /** Accessibility を拒むアプリ（`android:パッケージ名`）。前面にある間だけ、Accessibility を外す。 */
+  val pauseApps: List<String> = emptyList(),
 )
 
 /** 識別子が対象に当たるか。`domain:` はサブドメインも含む。 */
@@ -102,6 +104,7 @@ object Wire {
     lastUnlockEnd = o.getLong("last_unlock_end"),
     unlockMinutes = o.getInt("unlock_minutes"),
     others = o.getJSONArray("others").map(::segment),
+    pauseApps = o.optJSONArray("pause_apps")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(),
   )
 
   fun input(o: JSONObject): EngineInput {

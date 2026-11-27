@@ -35,6 +35,7 @@ class Agent private constructor(context: Context) {
   val stateStore = PrefsStore(context)
   val tracker = Tracker(stateStore)
   val link = Link(this)
+  val pause = Pause(this)
   val appVersion = "0.1.0"
 
   private val main = Handler(Looper.getMainLooper())
@@ -56,7 +57,7 @@ class Agent private constructor(context: Context) {
     return if (anchorServer > 0 && e >= anchorElapsed) anchorServer + (e - anchorElapsed) else System.currentTimeMillis()
   }
 
-  data class Flags(val accessibility: Boolean, val deviceAdmin: Boolean, val batteryUnrestricted: Boolean)
+  data class Flags(val accessibility: Boolean, val deviceAdmin: Boolean, val batteryUnrestricted: Boolean, val paused: Boolean)
 
   fun flags(): Flags {
     val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
@@ -65,6 +66,7 @@ class Agent private constructor(context: Context) {
       accessibility = guard != null,
       deviceAdmin = dpm.isAdminActive(ComponentName(context, AdminReceiver::class.java)),
       batteryUnrestricted = pm.isIgnoringBatteryOptimizations(context.packageName),
+      paused = pause.pausedFlag,
     )
   }
 
@@ -72,6 +74,8 @@ class Agent private constructor(context: Context) {
 
   fun start() {
     link.start()
+    // 一時停止の途中でプロセスが再開したときは、続き（戻すこと）を引き受ける
+    main.post { pause.resume() }
     reevaluate()
   }
 
@@ -108,7 +112,7 @@ class Agent private constructor(context: Context) {
 
   // ---- 前面のアプリ ----
 
-  private fun imes(): Set<String> =
+  fun imes(): Set<String> =
     imePackages ?: run {
       val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
       imm.enabledInputMethodList.map { it.packageName }.toSet().also { imePackages = it }
@@ -125,6 +129,8 @@ class Agent private constructor(context: Context) {
 
   /** 前面が変わった。画面オフは null。 */
   fun onForeground(pkg: String?) {
+    // 決済アプリなどが前面に来たら、何より先に Accessibility を外す（アプリが確かめるより前に）
+    pause.onForeground(pkg)
     tracker.onForeground(pkg?.let { "android:$it" }, now())
     guard?.watchBrowser(pkg?.takeIf { Browsers.supported(it) })
     if (pkg != null) checkUnsupportedBrowser(pkg)
@@ -155,7 +161,10 @@ class Agent private constructor(context: Context) {
     link.report("unsupported_browser", "対応していないブラウザ「${appLabel(pkg)}」を使いました（サイトの制限は効きません）")
   }
 
-  fun onScreenOff() = onForeground(null)
+  fun onScreenOff() {
+    pause.onScreenOff()
+    onForeground(null)
+  }
 
   /** 画面が点いたとき、いまの前面を調べ直す。 */
   fun refreshForeground() {

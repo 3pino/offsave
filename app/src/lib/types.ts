@@ -46,6 +46,8 @@ export interface DeviceFlags {
   accessibility: boolean;
   device_admin: boolean;
   battery_unrestricted: boolean;
+  /** 友達が決めたアプリの間だけ、Accessibility を自分で外している */
+  paused?: boolean;
 }
 
 export interface DeviceInfo {
@@ -90,6 +92,8 @@ export interface UserStatus {
   date: string;
   usage_today: UsageItem[];
   labels: KeyLabel[];
+  /** Accessibility を拒むアプリ（決済アプリなど）。前面にある間だけ、デバイスは Accessibility を外す。友達だけが決められる */
+  pause_apps: string[];
 }
 
 export type FriendState = 'pending_in' | 'pending_out' | 'accepted';
@@ -114,7 +118,8 @@ export type EventKind =
   | 'settings_changed'
   | 'rule_changed'
   | 'unsupported_browser'
-  | 'clock_skew';
+  | 'clock_skew'
+  | 'protection_paused';
 
 export interface OffsaveEvent {
   id: string;
@@ -131,6 +136,15 @@ export interface NativeStatus {
   configured: boolean;
   accessibility: boolean;
   deviceAdmin: boolean;
+  /** 友達が決めたアプリのために、Accessibility を自分で外している間 */
+  paused: boolean;
+  /** 設定の書き込みの権限（adb で 1 回付ける） */
+  canWriteSecure: boolean;
+  /** 使用状況へのアクセス */
+  usageAccess: boolean;
+  /** 友達が決めた、Accessibility を拒むアプリの数 */
+  pauseApps: number;
+  packageName: string;
   batteryUnrestricted: boolean;
   notifications: boolean;
   serviceRunning: boolean;

@@ -254,6 +254,7 @@ async fn handle(
                     | EventKind::ProtectionDisabled
                     | EventKind::UnsupportedBrowser
                     | EventKind::ClockSkew
+                    | EventKind::ProtectionPaused
             ) {
                 return Err(AppError::bad_request("このイベントは送れません"));
             }

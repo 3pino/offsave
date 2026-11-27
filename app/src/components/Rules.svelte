@@ -12,8 +12,10 @@
   import { session } from '../lib/session.svelte';
   import { ui } from '../lib/ui.svelte';
   import type { Rule, RuleInput, RuleStatus, User, UserStatus } from '../lib/types';
+  import KeyIcon from './KeyIcon.svelte';
   import Page from './Page.svelte';
   import RuleEditor from './RuleEditor.svelte';
+  import TargetPicker from './TargetPicker.svelte';
 
   // ルールの画面。自分のルール（友達が決めたもの）と、友達のルール（自分が決められる）を、人ごとに並べる
 
@@ -39,6 +41,13 @@
     return [...map].map(([key, label]) => ({ key, label }));
   }
 
+  // 「保護を一時停止するアプリ」を選んでいるところ（友達だけが決められる）
+  let pausePickingId = $state<string | null>(null);
+  // 選んでいる間も 5 秒ごとに取り直すので、id で持ち、最新の状態を引く
+  const pausePicking = $derived(people.find((p) => p.user.id === pausePickingId) ?? null);
+  const pauseCandidates = (p: Person) => candidatesOf(p).filter((c) => c.key.startsWith('android:'));
+  const setPause = (p: Person, keys: string[]) => act(() => api.setPauseApps(p.user.id, keys));
+
   function openEditor(person: Person, rule: Rule | null) {
     editing = { person, rule, candidates: candidatesOf(person) };
   }
@@ -59,6 +68,7 @@
         ...friends.map((f) => ({ user: f.user, mine: false })),
       ];
       const statuses = await Promise.all(list.map((p) => api.status(p.user.id).catch(() => null)));
+      for (const s of statuses) if (s) names.learn(s.labels);
       people = list.map((p, i) => ({ ...p, status: statuses[i] }));
     } catch (e) {
       ui.toast(errorText(e), 'error');
@@ -174,6 +184,23 @@
               </div>
             </div>
           {/each}
+
+          {#if !person.mine || status.pause_apps.length > 0}
+            <h3 class="block-title">保護を一時停止するアプリ</h3>
+            <p class="muted small">決済アプリなど、Accessibility が有効だと使えないアプリ。開いている間だけ、保護を自動で止めます。</p>
+            {#each status.pause_apps as key (key)}
+              <div class="row pause-row">
+                <KeyIcon {key} size={28} />
+                <span class="grow">{names.label(key)}</span>
+                {#if !person.mine}
+                  <IconButton label="{names.label(key)} を外す" icon={Trash2} onclick={() => setPause(person, status.pause_apps.filter((k) => k !== key))} />
+                {/if}
+              </div>
+            {/each}
+            {#if !person.mine}
+              <div><Button icon={Plus} onclick={() => (pausePickingId = person.user.id)}>アプリを追加</Button></div>
+            {/if}
+          {/if}
         {:else}
           <p class="empty">読み込み中…</p>
         {/if}
@@ -184,7 +211,23 @@
   </Page>
 {/if}
 
+{#if pausePicking}
+  {@const target = pausePicking}
+  <TargetPicker
+    appsOnly
+    title="保護を一時停止するアプリ"
+    candidates={pauseCandidates(target)}
+    picked={(k) => (pausePicking?.status?.pause_apps ?? []).includes(k)}
+    onpick={(k) => setPause(target, [...(pausePicking?.status?.pause_apps ?? []), k])}
+    onunpick={(k) => setPause(target, (pausePicking?.status?.pause_apps ?? []).filter((x) => x !== k))}
+    onclose={() => (pausePickingId = null)}
+  />
+{/if}
+
 <style>
+  .pause-row {
+    min-height: 32px;
+  }
   .person {
     display: flex;
     flex-direction: column;

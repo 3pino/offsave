@@ -138,6 +138,18 @@ impl Device {
         }
     }
 
+    /// 方針の更新は非同期にも届くので、条件を満たす方針が来るまでハートビートを送る。
+    async fn heartbeat_until(&mut self, flags: DeviceFlags, ok: impl Fn(&Policy) -> bool) -> Policy {
+        for _ in 0..20 {
+            let p = self.heartbeat(flags.clone()).await;
+            if ok(&p) {
+                return p;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        panic!("条件を満たす方針が来ません");
+    }
+
     async fn next_event(&mut self) -> Event {
         loop {
             if let ServerMsg::Event { event } = self.recv().await {
@@ -152,6 +164,7 @@ fn protected() -> DeviceFlags {
         accessibility: true,
         device_admin: true,
         battery_unrestricted: true,
+        paused: false,
     }
 }
 
@@ -524,6 +537,55 @@ async fn protection_loss_and_clean_shutdown() {
     let events: Vec<Event> = serde_json::from_value(bob.get("/events").await.1).unwrap();
     // bob 自身の端末は途絶えた扱いになるので、alice についてのものだけを見る
     assert!(!events.iter().any(|e| e.kind == EventKind::DeviceOffline && e.user.login_name == "alice@t"));
+}
+
+#[tokio::test]
+async fn only_a_friend_sets_the_apps_that_pause_protection_and_pausing_is_not_a_loss() {
+    let s = DevServer::start().await;
+    let (alice, bob, carol) = (Client::new(&s, "alice@t"), Client::new(&s, "bob@t"), Client::new(&s, "carol@t"));
+    let (a_id, _) = make_friends(&alice, &bob).await;
+    let mut bob_phone = bob.device("phone").await;
+    bob_phone.heartbeat(protected()).await;
+    let mut phone = alice.device("phone").await;
+    assert!(phone.heartbeat(protected()).await.pause_apps.is_empty());
+
+    let path = format!("/users/{a_id}/pause-apps");
+    let pay = json!({ "keys": ["android:jp.ne.paypay.android.app"] });
+    // 本人・友達でない人は決められない。サイトや不正な識別子も不可
+    assert_eq!(alice.put(&path, pay.clone()).await.0, 403);
+    assert_eq!(carol.put(&path, pay.clone()).await.0, 403);
+    assert_eq!(bob.put(&path, json!({ "keys": ["domain:example.com"] })).await.0, 400);
+    // 友達は決められ、デバイスの方針と状態に出る
+    assert_eq!(bob.put(&path, pay).await.0, 200);
+    phone.heartbeat_until(protected(), |p| p.pause_apps == ["android:jp.ne.paypay.android.app"]).await;
+    assert_eq!(alice.status(&a_id).await.pause_apps.len(), 1);
+    // 本人にも伝わる（変更は通知される）
+    let events: Vec<Event> = serde_json::from_value(alice.get("/events").await.1).unwrap();
+    assert!(events.iter().any(|e| e.kind == EventKind::RuleChanged && e.message.contains("Accessibility")));
+
+    // 一時停止中（Accessibility を自分で外した）は、保護が外れたとは見なさない
+    phone.heartbeat(DeviceFlags { accessibility: false, paused: true, ..protected() }).await;
+    phone.heartbeat(protected()).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let events: Vec<Event> = serde_json::from_value(bob.get("/events").await.1).unwrap();
+    assert!(!events.iter().any(|e| e.kind == EventKind::ProtectionDisabled));
+    // でも、一時停止のふりをしない Accessibility の欠落は通知される
+    phone.heartbeat(DeviceFlags { accessibility: false, ..protected() }).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let events: Vec<Event> = serde_json::from_value(bob.get("/events").await.1).unwrap();
+    assert!(events.iter().any(|e| e.kind == EventKind::ProtectionDisabled));
+
+    // デバイスが一時停止と再開を友達に報告できる
+    phone
+        .send(&DeviceMsg::Report { kind: EventKind::ProtectionPaused, message: "PayPayのため、保護を一時停止しました".into() })
+        .await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let events: Vec<Event> = serde_json::from_value(bob.get("/events").await.1).unwrap();
+    assert!(events.iter().any(|e| e.kind == EventKind::ProtectionPaused));
+
+    // 外すと、ポリシーからも消える
+    assert_eq!(bob.put(&path, json!({ "keys": [] })).await.0, 200);
+    phone.heartbeat_until(protected(), |p| p.pause_apps.is_empty()).await;
 }
 
 #[tokio::test]

@@ -68,6 +68,7 @@ class EnforcerPlugin(private val activity: Activity) : Plugin(activity) {
   /** 連携を解除する（友達に「終了」を送ってから、設定と記録を消す）。 */
   @Command
   fun clear(invoke: Invoke) {
+    agent.pause.restoreNow()
     agent.stop(bye = true)
     AgentService.stop(activity)
     agent.prefs.clear()
@@ -88,6 +89,11 @@ class EnforcerPlugin(private val activity: Activity) : Plugin(activity) {
     o.put("configured", a.prefs.configured)
     o.put("accessibility", f.accessibility)
     o.put("deviceAdmin", f.deviceAdmin)
+    o.put("paused", f.paused)
+    o.put("canWriteSecure", a.pause.canWriteSecure)
+    o.put("usageAccess", a.pause.hasUsageAccess)
+    o.put("pauseApps", a.tracker.policy?.pauseApps?.size ?: 0)
+    o.put("packageName", activity.packageName)
     o.put("batteryUnrestricted", f.batteryUnrestricted)
     o.put(
       "notifications",
@@ -108,6 +114,20 @@ class EnforcerPlugin(private val activity: Activity) : Plugin(activity) {
   fun openAccessibilitySettings(invoke: Invoke) {
     enterSetup()
     activity.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+    invoke.resolve()
+  }
+
+  /** 「使用状況へのアクセス」の設定（決済アプリの間の一時停止で、前面のアプリを見るのに使う）。 */
+  @Command
+  fun openUsageAccessSettings(invoke: Invoke) {
+    enterSetup()
+    val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+      .setData(Uri.parse("package:${activity.packageName}"))
+    try {
+      activity.startActivity(intent)
+    } catch (_: Exception) {
+      activity.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+    }
     invoke.resolve()
   }
 

@@ -17,7 +17,10 @@
     onpick,
     onunpick,
     onclose,
+    appsOnly = false,
   }: {
+    /** アプリだけを選ぶ（サイトは出さない。パッケージ名を直接入れられる） */
+    appsOnly?: boolean;
     title?: string;
     candidates: { key: string; label: string }[];
     /** すでに選ばれているか */
@@ -48,6 +51,11 @@
   function toKey(input: string): string | null {
     const s = input.trim();
     if (!s) return null;
+    if (appsOnly) {
+      // パッケージ名（jp.ne.paypay.android.app）か、android:… だけ
+      if (/^android:[A-Za-z0-9_.]+$/.test(s)) return s;
+      return /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$/.test(s) ? `android:${s}` : null;
+    }
     if (/^(android|win|linux|domain):\S+$/.test(s)) return s;
     // URL が貼られたときは、ホスト名だけにする（パス・クエリは持たない）
     const host = s.replace(/^[a-z]+:\/\//i, '').split(/[/?#]/)[0].replace(/^www\./i, '').toLowerCase();
@@ -64,7 +72,11 @@
 </script>
 
 <Modal {title} {onclose} width={460}>
-  <TextInput bind:value={search} placeholder="検索、またはサイト名（youtube.com）を入力" autocapitalize="off" />
+  <TextInput
+    bind:value={search}
+    placeholder={appsOnly ? '検索、またはパッケージ名を入力' : '検索、またはサイト名（youtube.com）を入力'}
+    autocapitalize="off"
+  />
 
   <div class="picker-list scroll">
     {#if showManual && manualKey}
@@ -85,7 +97,15 @@
         {#if picked(c.key)}<Check size={18} />{:else}<Plus size={18} />{/if}
       </button>
     {:else}
-      {#if !showManual}<p class="empty">{q ? '見つかりません。サイト名（youtube.com など）をそのまま入れると追加できます。' : '候補がありません。サイト名（youtube.com など）を入れてください。'}</p>{/if}
+      {#if !showManual}
+        <p class="empty">
+          {#if appsOnly}
+            {q ? '見つかりません。パッケージ名（jp.ne.paypay.android.app など）をそのまま入れると追加できます。' : '候補がありません。'}
+          {:else}
+            {q ? '見つかりません。サイト名（youtube.com など）をそのまま入れると追加できます。' : '候補がありません。サイト名（youtube.com など）を入れてください。'}
+          {/if}
+        </p>
+      {/if}
     {/each}
     {#if matched.length > LIMIT}
       <p class="empty small">ほか {matched.length - LIMIT} 件。検索で絞り込んでください。</p>

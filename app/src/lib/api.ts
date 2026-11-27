@@ -76,6 +76,9 @@ export class Api {
   deleteRule = (id: string) => this.req<{ ok: boolean }>('DELETE', `/rules/${id}`);
   createOverride = (userId: string, date: string, rule_id: string | null) =>
     this.req<Override>('POST', `/users/${userId}/overrides`, { date, rule_id });
+  /** Accessibility を拒むアプリ（決済アプリなど）の一覧を置き換える。友達だけができる */
+  setPauseApps = (userId: string, keys: string[]) =>
+    this.req<string[]>('PUT', `/users/${userId}/pause-apps`, { keys });
   deleteOverride = (id: string) => this.req<{ ok: boolean }>('DELETE', `/overrides/${id}`);
 
   events = (limit = 50) => this.req<OffsaveEvent[]>('GET', `/events?limit=${limit}`);

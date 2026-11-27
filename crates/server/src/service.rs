@@ -13,7 +13,7 @@ use offsave_core::time::logical_day;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::store::users::UserRow;
-use crate::store::{devices, events, friends, rules, usage, users};
+use crate::store::{devices, events, friends, pause_apps, rules, usage, users};
 use crate::timeutil::clock_for;
 
 /// 自分か、承認済みの友達か。
@@ -88,6 +88,7 @@ pub async fn build_policy(
         last_unlock_end,
         unlock_minutes: state.config.unlock_minutes,
         others: merge_by_key(others),
+        pause_apps: pause_apps::list(&state.pool, &user.id).await?,
     })
 }
 
@@ -135,5 +136,6 @@ pub async fn user_status(state: &AppState, user: &UserRow, now: Ms) -> AppResult
         date: day.date,
         usage_today,
         labels: usage::labels_of_user(&state.pool, &user.id).await?,
+        pause_apps: pause_apps::list(&state.pool, &user.id).await?,
     })
 }

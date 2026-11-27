@@ -8,6 +8,19 @@
   import { native } from '../lib/native';
   import { protection } from '../lib/protection.svelte';
   import { session } from '../lib/session.svelte';
+  import { ui } from '../lib/ui.svelte';
+
+  /** 設定の書き込みの権限を付ける adb のコマンド */
+  const adbCommand = $derived(`adb shell pm grant ${protection.ns?.packageName ?? 'dev.offsave.app'} android.permission.WRITE_SECURE_SETTINGS`);
+
+  async function copyCommand() {
+    try {
+      await navigator.clipboard.writeText(adbCommand);
+      ui.toast('コピーしました');
+    } catch {
+      ui.toast('コピーできませんでした。画面の文字を選んでコピーしてください', 'error');
+    }
+  }
 
   // このデバイスの保護（Android）。上から順に有効にしていく
   const ns = $derived(protection.ns);
@@ -24,11 +37,13 @@
     ns
       ? [
           {
-            ok: ns.accessibility,
+            ok: ns.accessibility || ns.paused,
             title: 'Accessibility（前面のアプリの検知と制限の表示）',
-            action: ns.accessibility ? null : { label: '設定を開く', run: native.openAccessibilitySettings },
-            hint: ns.accessibility
-              ? ''
+            action: ns.accessibility || ns.paused ? null : { label: '設定を開く', run: native.openAccessibilitySettings },
+            hint: ns.paused
+              ? '決済アプリなどのため、いま一時停止中です（アプリを離れると戻ります）。'
+              : ns.accessibility
+                ? ''
               : '一覧から offsave を選んで有効にします。「制限された設定」と出たら、「アプリ情報」の右上のメニューから許可してください。',
           },
           {
@@ -81,11 +96,44 @@
       {/snippet}
     </SettingRow>
   {/each}
-  {#if !ns.accessibility}
+  {#if !ns.accessibility && !ns.paused}
     <div><Button onclick={() => native.openAppDetails()}>アプリ情報（制限された設定の許可）</Button></div>
+  {/if}
+
+  <!-- 友達が「保護を一時停止するアプリ」を決めているときだけ、その準備を出す -->
+  {#if ns.pauseApps > 0}
+    <h2 class="block-title">保護の一時停止の準備</h2>
+    <SettingRow
+      name="設定の書き込みの権限"
+      description="PC と USB でつないで、次のコマンドを 1 回実行します（アンインストールするまで有効）。"
+      icon={ns.canWriteSecure ? CircleCheck : CircleX}
+    />
+    {#if !ns.canWriteSecure}
+      <code class="selectable adb-command">{adbCommand}</code>
+      <div><Button onclick={copyCommand}>コマンドをコピー</Button></div>
+    {/if}
+    <SettingRow name="使用状況へのアクセス" icon={ns.usageAccess ? CircleCheck : CircleX}>
+      {#snippet control()}
+        <div class="setting-row-control-slot">
+          {#if !ns.usageAccess}<Button variant="primary" onclick={() => native.openUsageAccessSettings()}>許可する</Button>{/if}
+        </div>
+      {/snippet}
+    </SettingRow>
   {/if}
 {:else if protection.error}
   <p class="error-text">{protection.error}</p>
 {:else}
   <p class="empty">読み込み中…</p>
 {/if}
+
+<style>
+  .adb-command {
+    display: block;
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    font-size: var(--fs-sm);
+    word-break: break-all;
+  }
+</style>

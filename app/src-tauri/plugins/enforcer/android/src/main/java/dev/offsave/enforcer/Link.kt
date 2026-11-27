@@ -193,7 +193,8 @@ class Link(private val agent: Agent) {
           "flags",
           JSONObject().put("accessibility", flags.accessibility)
             .put("device_admin", flags.deviceAdmin)
-            .put("battery_unrestricted", flags.batteryUnrestricted),
+            .put("battery_unrestricted", flags.batteryUnrestricted)
+            .put("paused", flags.paused),
         )
         .put("foreground", tracker.foregroundKey ?: JSONObject.NULL)
         .put("app_version", agent.appVersion)

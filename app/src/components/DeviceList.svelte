@@ -37,7 +37,9 @@
       {d.platform} ・ 最後の連絡 {d.last_seen ? ago(d.last_seen) : 'なし'}
       {#if d.foreground}・ いま {names.label(d.foreground)}{/if}
     </div>
-    {#if d.state !== 'new' && !(d.flags.accessibility && d.flags.device_admin)}
+    {#if d.flags.paused}
+      <div class="muted small">決済アプリなどのため、保護を一時停止しています。</div>
+    {:else if d.state !== 'new' && !(d.flags.accessibility && d.flags.device_admin)}
       <div class="error-text small">
         保護が不完全です:
         {#if !d.flags.accessibility}Accessibility が無効 {/if}

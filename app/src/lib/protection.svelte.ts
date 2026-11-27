@@ -20,7 +20,10 @@ class Protection {
   /** 足りないものがあるか（ホームの警告・設定の点に使う） */
   get incomplete(): boolean {
     const n = this.ns;
-    return !!n && !(n.accessibility && n.deviceAdmin && n.batteryUnrestricted && n.notifications);
+    if (!n) return false;
+    // 友達が決めたアプリがあるのに、一時停止の準備（権限）が無いと、そのアプリを使う前に Accessibility を手で切ることになる
+    const pauseReady = n.pauseApps === 0 || (n.canWriteSecure && n.usageAccess);
+    return !((n.accessibility || n.paused) && n.deviceAdmin && n.batteryUnrestricted && n.notifications && pauseReady);
   }
 
   async refresh() {

@@ -21,12 +21,16 @@ pub struct DeviceFlags {
     pub accessibility: bool,
     pub device_admin: bool,
     pub battery_unrestricted: bool,
+    /// 友達が決めたアプリ（決済アプリなど）の間だけ、Accessibility を自分で外している。
+    /// 前面のアプリが離れたら、デバイスが自分で戻す。この間は、保護が外れたとは見なさない。
+    #[serde(default)]
+    pub paused: bool,
 }
 
 impl DeviceFlags {
     /// 制限を強制できる状態か。
     pub fn protected(&self) -> bool {
-        self.accessibility && self.device_admin
+        (self.accessibility || self.paused) && self.device_admin
     }
 }
 
@@ -91,6 +95,9 @@ pub struct UserStatus {
     /// 利用したアプリの表示名。
     #[serde(default)]
     pub labels: Vec<KeyLabel>,
+    /// Accessibility を拒むアプリ（決済アプリなど）。これが前面にある間だけ、デバイスは Accessibility を外す。友達だけが決められる。
+    #[serde(default)]
+    pub pause_apps: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -135,6 +142,8 @@ pub enum EventKind {
     UnsupportedBrowser,
     /// デバイスの時計がサーバーと大きくずれている。
     ClockSkew,
+    /// 決済アプリなどのために、保護を一時停止した（または再開した）。
+    ProtectionPaused,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -163,6 +172,9 @@ pub struct Policy {
     pub unlock_minutes: u32,
     /// ほかのデバイスの、今日の利用区間（識別子ごとにまとめたもの）。
     pub others: Vec<Segment>,
+    /// Accessibility を拒むアプリ。前面にある間だけ、デバイスが Accessibility を外す。
+    #[serde(default)]
+    pub pause_apps: Vec<String>,
 }
 
 /// デバイス → サーバー。

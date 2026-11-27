@@ -37,6 +37,16 @@ class Prefs(context: Context) {
     get() = sp.getLong("setup_until", 0)
     set(v) = sp.edit().putLong("setup_until", v).apply()
 
+  /** 一時停止中（Accessibility を自分で外している）の決済アプリのパッケージ名。していなければ null。 */
+  var pausePackage: String?
+    get() = sp.getString("pause_package", null)
+    set(v) = sp.edit().putString("pause_package", v).apply()
+
+  /** 一時停止を始めた時刻（端末の時計。UsageStats の出来事と同じ基準）。 */
+  var pauseStartedAt: Long
+    get() = sp.getLong("pause_started_at", 0)
+    set(v) = sp.edit().putLong("pause_started_at", v).apply()
+
   val configured: Boolean get() = !serverUrl.isNullOrEmpty() && !token.isNullOrEmpty()
 
   fun clear() {

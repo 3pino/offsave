@@ -3,7 +3,7 @@
 use axum::extract::{Path, Query, State};
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
-use offsave_core::model::{Limit, Rule, Target};
+use offsave_core::model::{Limit, Rule, Target, valid_key};
 use offsave_core::protocol::{
     DeviceInfo, Event, EventKind, Friend, FriendState, User, UserSettings, UserStatus,
 };
@@ -17,8 +17,11 @@ use crate::service::{self, can_view, clock_of, emit, recipients};
 use crate::state::SharedState;
 use crate::store::friends::RequestResult;
 use crate::store::users::UserRow;
-use crate::store::{devices, events, friends, rules, users};
+use crate::store::{devices, events, friends, pause_apps, rules, users};
 use crate::timeutil::valid_timezone;
+
+/// Accessibility を拒むアプリの上限数
+const MAX_PAUSE_APPS: usize = 20;
 
 pub fn router() -> Router<SharedState> {
     Router::new()
@@ -33,6 +36,7 @@ pub fn router() -> Router<SharedState> {
         .route("/users/{id}/status", get(user_status))
         .route("/users/{id}/rules", post(create_rule))
         .route("/users/{id}/overrides", post(create_override))
+        .route("/users/{id}/pause-apps", put(set_pause_apps))
         .route("/rules/{id}", put(update_rule).delete(delete_rule))
         .route("/overrides/{id}", delete(delete_override))
         .route("/events", get(list_events))
@@ -491,6 +495,48 @@ async fn create_override(
         date: body.date,
         rule_id: body.rule_id,
     }))
+}
+
+#[derive(Deserialize)]
+struct PauseAppsInput {
+    keys: Vec<String>,
+}
+
+/// Accessibility を拒むアプリ（決済アプリなど）の一覧を置き換える。保護を弱める操作なので、友達だけができる。
+async fn set_pause_apps(
+    State(state): State<SharedState>,
+    CurrentUser(me): CurrentUser,
+    Path(owner_id): Path<String>,
+    Json(body): Json<PauseAppsInput>,
+) -> AppResult<Json<Vec<String>>> {
+    require_access(&state, &me, &owner_id, true).await?;
+    let owner = target_user(&state, &owner_id).await?;
+    let mut keys = body.keys;
+    keys.sort();
+    keys.dedup();
+    if keys.len() > MAX_PAUSE_APPS {
+        return Err(AppError::bad_request(format!("{MAX_PAUSE_APPS} 件までです")));
+    }
+    // この仕組みは Android のアプリだけ。サイトや他 OS の識別子は受け付けない
+    if keys.iter().any(|k| !k.starts_with("android:") || !valid_key(k)) {
+        return Err(AppError::bad_request("Android のアプリ（android:…）だけ指定できます"));
+    }
+    let before = pause_apps::list(&state.pool, &owner.id).await?;
+    if before == keys {
+        return Ok(Json(keys));
+    }
+    pause_apps::replace(&state.pool, &owner.id, &me.id, &keys).await?;
+    rule_changed(
+        &state,
+        &owner,
+        &me,
+        &format!(
+            "「Accessibility を拒むアプリ」を {} 件にしました（これを開いている間だけ、保護を一時停止します）",
+            keys.len()
+        ),
+    )
+    .await?;
+    Ok(Json(keys))
 }
 
 async fn delete_override(
