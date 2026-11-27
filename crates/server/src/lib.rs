@@ -4,6 +4,7 @@ pub mod auth;
 pub mod config;
 pub mod db;
 pub mod error;
+pub mod favicon;
 pub mod hub;
 pub mod routes;
 pub mod service;

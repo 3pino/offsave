@@ -1,6 +1,8 @@
 import { Shell } from '@3pino/app-kit-web/shell';
 
 export type Tab = 'home' | 'rules' | 'friends' | 'events' | 'settings';
+/** 設定の中のサブ画面 */
+export type SettingsSub = 'protection' | 'devices' | 'hidden';
 
 /** 幅の境目（@3pino/design-system の決まり。767px 以下がモバイル） */
 const MOBILE_QUERY = '(max-width: 767px)';
@@ -12,6 +14,8 @@ class Ui {
   isMobile = $state(typeof matchMedia === 'function' ? matchMedia(MOBILE_QUERY).matches : false);
   /** ルールの画面で、先頭に出す人（友達の画面の「ルールを編集」から来たとき） */
   rulesFocus = $state<string | null>(null);
+  /** 設定で、開いて見せるサブ画面（ホームの警告から来たとき） */
+  settingsSub = $state<SettingsSub | null>(null);
   /** 戻る操作で閉じる層（サブ画面）。新しいものが後ろ */
   private layers = $state.raw<{ close: () => void }[]>([]);
 
@@ -30,6 +34,7 @@ class Ui {
   selectTab(tab: Tab) {
     this.tab = tab;
     if (tab !== 'rules') this.rulesFocus = null;
+    if (tab !== 'settings') this.settingsSub = null;
     // タブを替えたら、開いていたサブ画面は閉じる
     for (const l of [...this.layers].reverse()) l.close();
   }
@@ -38,6 +43,12 @@ class Ui {
   openRulesOf(userId: string) {
     this.rulesFocus = userId;
     this.selectTab('rules');
+  }
+
+  /** 設定を、そのサブ画面を開いて開く */
+  openSettings(sub: SettingsSub) {
+    this.selectTab('settings');
+    this.settingsSub = sub;
   }
 
   /**

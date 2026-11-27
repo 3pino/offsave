@@ -77,4 +77,16 @@ export class Api {
   deleteOverride = (id: string) => this.req<{ ok: boolean }>('DELETE', `/overrides/${id}`);
 
   events = (limit = 50) => this.req<OffsaveEvent[]>('GET', `/events?limit=${limit}`);
+
+  /** アイコン（アプリは、デバイスが送ったもの。サイトは、サーバーが取ったファビコン）。無ければ null */
+  async icon(key: string): Promise<Blob | null> {
+    const headers: Record<string, string> = {};
+    if (this.devUser) headers['x-dev-user'] = this.devUser;
+    try {
+      const res = await fetch(`${this.base}/api/icons?key=${encodeURIComponent(key)}`, { headers });
+      return res.ok ? await res.blob() : null;
+    } catch {
+      return null;
+    }
+  }
 }

@@ -24,4 +24,6 @@ export const native = {
   requestNotifications: () => call<void>('request_notifications'),
   openAppDetails: () => call<void>('open_app_details'),
   installedApps: async () => (await call<{ apps: InstalledApp[] }>('installed_apps')).apps,
+  /** アプリのアイコン（PNG の base64）。取れなければ空文字 */
+  appIcon: async (pkg: string) => (await call<{ png: string }>('app_icon', { pkg })).png,
 };

@@ -9,6 +9,7 @@ const COMMANDS: &[&str] = &[
     "request_notifications",
     "open_app_details",
     "installed_apps",
+    "app_icon",
 ];
 
 fn main() {

@@ -22,6 +22,7 @@
   import Setup from './components/Setup.svelte';
   import { events } from './lib/events.svelte';
   import { names } from './lib/names.svelte';
+  import { protection } from './lib/protection.svelte';
   import { session } from './lib/session.svelte';
   import { ui, type Tab } from './lib/ui.svelte';
   import { updater } from './lib/updater.svelte';
@@ -56,6 +57,19 @@
     return () => document.removeEventListener('click', onClick);
   });
 
+  // 配布版でも Ctrl+Shift+I（F12）で開発者ツールを開く（デスクトップのみ）
+  onMount(() => {
+    if (!isTauri() || isAndroid()) return;
+    const onKey = (e: KeyboardEvent) => {
+      const ctrlShiftI = e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i');
+      if (!ctrlShiftI && e.key !== 'F12') return;
+      e.preventDefault();
+      void import('@tauri-apps/api/core').then(({ invoke }) => invoke('open_devtools'));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   // PC の Alt+←: Android の戻るボタンと同じく、サブ画面を 1 つ閉じる
   onMount(() => {
     if (isAndroid()) return;
@@ -82,7 +96,11 @@
   $effect(() => {
     if (!session.saved) return;
     events.start();
-    return () => events.stop();
+    protection.start();
+    return () => {
+      events.stop();
+      protection.stop();
+    };
   });
 
   const items = $derived<NavBarItem[]>([
@@ -90,7 +108,7 @@
     { id: 'rules', label: 'ルール', icon: ListChecks },
     { id: 'friends', label: '友達', icon: Users },
     { id: 'events', label: '通知', icon: Bell, badge: ui.tab === 'events' ? null : events.unseen },
-    { id: 'settings', label: '設定', icon: Settings, alert: showUpdateBadge(updater.state) ? UPDATE_BADGE_LABEL : null },
+    { id: 'settings', label: '設定', icon: Settings, alert: protection.incomplete ? '保護が不完全' : showUpdateBadge(updater.state) ? UPDATE_BADGE_LABEL : null },
   ]);
 </script>
 

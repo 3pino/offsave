@@ -1,3 +1,4 @@
+import { untrack } from 'svelte';
 import { isAndroid, native } from './native';
 import { keyName } from './format';
 import type { InstalledApp, KeyLabel } from './types';
@@ -8,8 +9,9 @@ import type { InstalledApp, KeyLabel } from './types';
  * そのデバイスがサーバーに送った表示名から。どちらも無ければパッケージ名のまま出す。
  */
 class Names {
-  apps = $state<InstalledApp[]>([]);
-  private remote = $state<Record<string, string>>({});
+  /** インストール済みのアプリ（数百件あるので、中身まで反応させない） */
+  apps = $state.raw<InstalledApp[]>([]);
+  private remote = $state.raw<Record<string, string>>({});
   private local = $derived(new Map(this.apps.map((a) => [`android:${a.package}`, a.label])));
 
   async load() {
@@ -23,9 +25,18 @@ class Names {
 
   /** サーバーから受け取った表示名を覚える。 */
   learn(labels: KeyLabel[]) {
-    for (const l of labels) {
-      if (this.remote[l.key] !== l.label) this.remote[l.key] = l.label;
-    }
+    untrack(() => {
+      let next: Record<string, string> | null = null;
+      for (const l of labels) {
+        if (this.remote[l.key] !== l.label) (next ??= { ...this.remote })[l.key] = l.label;
+      }
+      if (next) this.remote = next;
+    });
+  }
+
+  /** このデバイスにインストールされているアプリか */
+  isLocalApp(key: string): boolean {
+    return this.local.has(key);
   }
 
   label(key: string): string {

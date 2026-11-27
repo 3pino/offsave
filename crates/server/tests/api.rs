@@ -47,6 +47,19 @@ impl<'a> Client<'a> {
     async fn get(&self, path: &str) -> (u16, Value) {
         self.send(reqwest::Method::GET, path, None).await
     }
+    /// JSON でない応答（画像）: (状態, Content-Type, 本文)
+    async fn get_raw(&self, path: &str) -> (u16, String, Vec<u8>) {
+        let res = self
+            .http
+            .get(self.server.url(&format!("/api{path}")))
+            .header("x-dev-user", self.user)
+            .send()
+            .await
+            .unwrap();
+        let code = res.status().as_u16();
+        let ct = res.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_owned();
+        (code, ct, res.bytes().await.unwrap().to_vec())
+    }
     async fn post(&self, path: &str, body: Value) -> (u16, Value) {
         self.send(reqwest::Method::POST, path, Some(body)).await
     }
@@ -546,6 +559,59 @@ async fn device_removal_is_reported_and_keeps_usage() {
     let mut req = s.ws_url("/api/ws/device", "alice@t").into_client_request().unwrap();
     req.headers_mut().insert("x-device-token", phone.token.parse().unwrap());
     assert!(tokio_tungstenite::connect_async(req).await.is_err());
+}
+
+#[tokio::test]
+async fn a_friend_can_remove_a_device_but_a_stranger_cannot() {
+    let s = DevServer::start().await;
+    let (alice, bob, carol) = (Client::new(&s, "alice@t"), Client::new(&s, "bob@t"), Client::new(&s, "carol@t"));
+    let (a_id, _) = make_friends(&alice, &bob).await;
+    let phone = alice.device("phone").await;
+
+    assert_eq!(carol.delete(&format!("/devices/{}", phone.id)).await.0, 403);
+    assert_eq!(bob.delete(&format!("/devices/{}", phone.id)).await.0, 200);
+    assert!(bob.status(&a_id).await.devices.is_empty());
+    // 本人にも、だれが消したかが届く
+    let events: Vec<Event> = serde_json::from_value(alice.get("/events").await.1).unwrap();
+    let removed = events.iter().find(|e| e.kind == EventKind::DeviceRemoved).unwrap();
+    assert!(removed.message.contains("bob"), "{}", removed.message);
+    // すでに消えたデバイスは、もう消せない
+    assert_eq!(bob.delete(&format!("/devices/{}", phone.id)).await.0, 404);
+}
+
+#[tokio::test]
+async fn app_icons_are_shared_and_sites_never_reach_private_hosts() {
+    use base64::Engine as _;
+    let s = DevServer::start().await;
+    let (alice, bob) = (Client::new(&s, "alice@t"), Client::new(&s, "bob@t"));
+    let mut phone = alice.device("phone").await;
+    let mut png = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+    png.extend_from_slice(&[1, 2, 3, 4]);
+    let b64 = |b: &[u8]| base64::engine::general_purpose::STANDARD.encode(b);
+    use offsave_core::protocol::KeyIcon;
+    phone
+        .send(&DeviceMsg::Icons {
+            icons: vec![
+                KeyIcon { key: "android:com.example.game".into(), png: b64(&png) },
+                // PNG でない・サイトのキー・大きすぎるものは受け取らない
+                KeyIcon { key: "android:com.example.bad".into(), png: b64(b"<svg/>") },
+                KeyIcon { key: "domain:example.com".into(), png: b64(&png) },
+                KeyIcon { key: "android:com.example.big".into(), png: b64(&[png.clone(), vec![0; 20_000]].concat()) },
+            ],
+        })
+        .await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // 友達でなくても、ログインしていれば取れる（アイコンは公開情報）
+    let (code, ct, body) = bob.get_raw("/icons?key=android:com.example.game").await;
+    assert_eq!((code, ct.as_str(), body), (200, "image/png", png));
+    assert_eq!(bob.get_raw("/icons?key=android:com.example.bad").await.0, 404);
+    assert_eq!(bob.get_raw("/icons?key=android:com.example.big").await.0, 404);
+    // 内部向けの名前・ IP アドレスは、取りに行かずに 404
+    for host in ["localhost", "127.0.0.1", "100.83.29.24", "printer.local"] {
+        assert_eq!(bob.get_raw(&format!("/icons?key=domain:{host}")).await.0, 404, "{host}");
+    }
+    assert_eq!(bob.get_raw("/icons?key=nonsense").await.0, 400);
 }
 
 #[tokio::test]

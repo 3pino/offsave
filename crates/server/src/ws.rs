@@ -23,12 +23,17 @@ use crate::service::{build_policy, emit, recipients};
 use crate::state::SharedState;
 use crate::store::devices::{self, DeviceRow};
 use crate::store::users::UserRow;
-use crate::store::{events, usage};
+use crate::store::{events, icons, usage};
 
 pub const TOKEN_HEADER: &str = "x-device-token";
 /// これだけ何も届かなければ、接続を閉じる（ハートビートは 60 秒ごと）。
 const IDLE: Duration = Duration::from_secs(200);
 const MAX_SEGMENTS: usize = 1000;
+const MAX_ICONS_PER_MSG: usize = 50;
+/// アプリのアイコン 1 つの上限（PNG で 16KB。表示は 24px 程度なので十分）
+const MAX_ICON_BYTES: usize = 16 * 1024;
+/// 同じアプリのアイコンを更新しない期間
+const ICON_REFRESH_MS: Ms = 7 * 86_400_000;
 
 pub async fn device_ws(
     State(state): State<SharedState>,
@@ -199,6 +204,24 @@ async fn handle(
             }
             Ok(vec![])
         }
+        DeviceMsg::Icons { icons } => {
+            use base64::Engine as _;
+            for i in icons.into_iter().take(MAX_ICONS_PER_MSG) {
+                // アプリのアイコンだけ（サイトはサーバーが取る）。小さな PNG だけ受け取る
+                if !i.key.starts_with("android:") || !valid_key(&i.key) {
+                    continue;
+                }
+                let Ok(png) = base64::engine::general_purpose::STANDARD.decode(&i.png) else {
+                    continue;
+                };
+                if png.len() > MAX_ICON_BYTES || crate::favicon::sniff(&png) != Some("image/png") {
+                    continue;
+                }
+                // 同じアプリのアイコンを毎回書き直さない（古くなったものだけ更新）
+                icons::put(&state.pool, &i.key, "image/png", Some(&png), now, Some(now - ICON_REFRESH_MS)).await?;
+            }
+            Ok(vec![])
+        }
         DeviceMsg::Unlock {
             reason,
             started_at,
@@ -251,7 +274,7 @@ fn lost_protection(before: &DeviceFlags, now: &DeviceFlags) -> String {
         lost.push("Accessibility が無効になりました");
     }
     if before.device_admin && !now.device_admin {
-        lost.push("端末管理者が無効になりました");
+        lost.push("デバイス管理者が無効になりました");
     }
     lost.join("、")
 }

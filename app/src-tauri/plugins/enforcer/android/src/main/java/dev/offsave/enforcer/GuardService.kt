@@ -40,10 +40,26 @@ class GuardService : AccessibilityService() {
     val root = rootInActiveWindow ?: return
     // 自分のオーバーレイやキーボードがアクティブなときは読まない（直前のサイトをそのままにする）
     if (root.packageName?.toString() != pkg) return
-    val id = Browsers.urlBarId(pkg) ?: return
-    val node = root.findAccessibilityNodeInfosByViewId(id).firstOrNull() ?: return // 全画面動画などでバーが無い間は、直前のサイトを続ける
+    // 全画面動画などでバーが無い間は、直前のサイトを続ける
+    val node = findUrlBar(root, pkg) ?: return
     if (node.isFocused) return // 入力中の文字は読まない
-    Agent.get(this).onDomain(Browsers.hostOf(node.text?.toString() ?: ""))
+    Agent.get(this).onDomain(Browsers.hostOfBar(node.text?.toString(), node.contentDescription?.toString()))
+  }
+
+  /** URL バーのノード。View の ID で探し、無ければ Compose のツールバーの中をたどる。 */
+  private fun findUrlBar(root: AccessibilityNodeInfo, pkg: String): AccessibilityNodeInfo? {
+    Browsers.urlBarIds(pkg).firstNotNullOfOrNull { root.findAccessibilityNodeInfosByViewId(it).firstOrNull() }?.let { return it }
+    val bar = Browsers.composeBar(pkg) ?: return null
+    val container = root.findAccessibilityNodeInfosByViewId(bar.containerId).firstOrNull() ?: return null
+    // Compose のノードは ID では見つからない。ツールバーの中だけを、数を限ってたどる（ページの中身には入らない）
+    var budget = COMPOSE_SEARCH_NODES
+    fun walk(n: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+      if (budget-- <= 0) return null
+      if (n.viewIdResourceName == bar.tag) return n
+      for (i in 0 until n.childCount) walk(n.getChild(i) ?: continue)?.let { return it }
+      return null
+    }
+    return walk(container)
   }
 
   override fun onServiceConnected() {
@@ -106,6 +122,8 @@ class GuardService : AccessibilityService() {
 
   companion object {
     private const val BROWSER_POLL_MS = 2_000L
+    /** Compose のツールバーの中で、ノードをたどる数の上限（実際は 30 程度） */
+    private const val COMPOSE_SEARCH_NODES = 200
 
     private val SETTINGS_PACKAGES = setOf(
       "com.android.settings",

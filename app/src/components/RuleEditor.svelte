@@ -7,26 +7,27 @@
   import TextInput from '@3pino/ui-kit-web/TextInput.svelte';
   import Toggle from '@3pino/ui-kit-web/Toggle.svelte';
   import { errorText } from '../lib/errors';
-  import { keyName } from '../lib/format';
   import { limitError, newLimit } from '../lib/limits';
-  import { isAndroid } from '../lib/native';
-  import { names } from '../lib/names.svelte';
-  import type { Limit, Rule, RuleInput, Target, UsageItem } from '../lib/types';
+  import { ui } from '../lib/ui.svelte';
+  import type { Limit, Rule, RuleInput, Target } from '../lib/types';
+  import KeyIcon from './KeyIcon.svelte';
   import LimitEditor from './LimitEditor.svelte';
   import Page from './Page.svelte';
+  import TargetPicker from './TargetPicker.svelte';
 
+  // ルールの追加・編集。2 つの画面に分ける: ① 名前と対象 → ② 制限
   let {
     ownerName,
     initial = null,
-    usage = [],
+    candidates = [],
     onsave,
     oncancel,
   }: {
     /** ルールを受ける人の呼び方（「あなた」「bob さん」など。見出しに出す） */
     ownerName: string;
     initial?: Rule | null;
-    /** 対象の人が今日使ったもの（ここから選べる） */
-    usage?: UsageItem[];
+    /** 対象に選べるアプリ・サイト（ポップアップに出す） */
+    candidates?: { key: string; label: string }[];
     onsave: (rule: RuleInput) => Promise<void>;
     oncancel: () => void;
   } = $props();
@@ -34,44 +35,41 @@
   // 編集の開始時の値だけを使う（あとから props が変わっても、入力中の内容は消さない）
   const init = untrack(() => initial);
 
+  let step = $state<1 | 2>(1);
   let name = $state(init?.name ?? '');
   let enabled = $state(init?.enabled ?? true);
-  let targets = $state<Target[]>(init ? init.targets.map((t) => ({ label: t.label, keys: [...t.keys] })) : []);
+  let targets = $state.raw<Target[]>(init ? init.targets.map((t) => ({ label: t.label, keys: [...t.keys] })) : []);
   let limits = $state<Limit[]>(init ? init.limits.map((l) => ({ ...l })) : [newLimit('daily_total')]);
 
-  let manualKey = $state('');
-  let manualLabel = $state('');
-  let search = $state('');
   let picking = $state(false);
   let busy = $state(false);
   let error = $state('');
 
+  // ② から戻る操作（Android の戻る）で、① に戻る
+  $effect(() => {
+    if (step !== 2) return;
+    return ui.pushLayer(() => (step = 1));
+  });
+
   const has = (key: string) => targets.some((t) => t.keys.includes(key));
 
-  function addTarget(label: string, key: string) {
-    if (!has(key)) targets.push({ label, keys: [key] });
+  function addTarget(key: string, label: string) {
+    if (!has(key)) targets = [...targets, { label, keys: [key] }];
   }
 
-  function addManual() {
-    let key = manualKey.trim();
-    if (!key) return;
-    // 接頭辞がなければ、ドメインとして扱う（URL が貼られたときは、ホスト名だけにする）
-    if (!/^(android|win|linux|domain):/.test(key)) {
-      key = `domain:${key.replace(/^[a-z]+:\/\//i, '').split(/[/?#]/)[0].replace(/^www\./i, '').toLowerCase()}`;
-    }
-    addTarget(manualLabel.trim() || keyName(key), key);
-    manualKey = '';
-    manualLabel = '';
+  function removeTarget(key: string) {
+    targets = targets.filter((t) => !t.keys.includes(key));
   }
 
-  const filtered = $derived(
-    names.apps.filter((a) => (a.label + a.package).toLowerCase().includes(search.toLowerCase())).slice(0, 40),
-  );
-
-  async function save() {
+  function next() {
     error = '';
     if (!name.trim()) return (error = 'ルールの名前を入力してください');
     if (targets.length === 0) return (error = '対象のアプリかサイトを 1 つ以上選んでください');
+    step = 2;
+  }
+
+  async function save() {
+    error = '';
     if (limits.length === 0) return (error = '制限を 1 つ以上入れてください');
     for (const l of limits) {
       const e = limitError(l);
@@ -88,93 +86,79 @@
   }
 </script>
 
-<Page title={init ? 'ルールを編集' : 'ルールを追加'} onback={oncancel}>
+<Page title={init ? 'ルールを編集' : 'ルールを追加'} onback={step === 2 ? () => (step = 1) : oncancel}>
   {#snippet actions()}
-    <Button variant="primary" disabled={busy} onclick={save}>{busy ? '保存中…' : '保存'}</Button>
+    {#if step === 1}
+      <Button variant="primary" onclick={next}>次へ</Button>
+    {:else}
+      <Button variant="primary" disabled={busy} onclick={save}>{busy ? '保存中…' : '保存'}</Button>
+    {/if}
   {/snippet}
 
-  <p class="muted small editor-for">{ownerName}のルールです。</p>
+  <p class="muted small editor-for">{ownerName}のルール ・ {step} / 2　{step === 1 ? '名前と対象' : '制限'}</p>
 
-  <label class="field">
-    <span class="field-label">ルールの名前</span>
-    <TextInput bind:value={name} placeholder="例: ゲーム" />
-  </label>
+  {#if step === 1}
+    <label class="field">
+      <span class="field-label">ルールの名前</span>
+      <TextInput bind:value={name} placeholder="例: ゲーム" />
+    </label>
 
-  <section class="editor-block">
-    <h2 class="block-title">対象（合計で数えます）</h2>
-    <div class="chips">
-      {#each targets as t, i (t.keys.join())}
-        <span class="chip chip-on target">
-          {t.label}
-          <button type="button" class="target-x" aria-label="{t.label} を外す" onclick={() => targets.splice(i, 1)}><X size={14} /></button>
-        </span>
-      {:else}
-        <span class="empty">まだありません。</span>
-      {/each}
-    </div>
-
-    {#if usage.length > 0}
-      <div class="muted small">今日使ったもの（押すと追加）</div>
-      <div class="chips">
-        {#each usage as u (u.key)}
-          <button type="button" class="chip" class:chip-on={has(u.key)} onclick={() => addTarget(names.label(u.key), u.key)}>
-            {has(u.key) ? '✓ ' : '＋ '}{names.label(u.key)}
-          </button>
+    <section class="editor-block">
+      <h2 class="block-title">対象（合計で数えます）</h2>
+      <div class="targets">
+        {#each targets as t (t.keys.join())}
+          <div class="target-row">
+            <KeyIcon key={t.keys[0]} size={28} />
+            <span class="grow target-name">{t.label}</span>
+            <button type="button" class="target-x" aria-label="{t.label} を外す" onclick={() => removeTarget(t.keys[0])}><X size={16} /></button>
+          </div>
+        {:else}
+          <span class="empty">まだありません。</span>
         {/each}
       </div>
-    {/if}
+      <div><Button icon={Plus} onclick={() => (picking = true)}>アプリ・サイトを追加</Button></div>
+    </section>
 
-    {#if isAndroid}
-      <div><Button onclick={() => (picking = !picking)}>このデバイスのアプリから選ぶ</Button></div>
-      {#if picking}
-        <TextInput bind:value={search} placeholder="検索" />
-        <div class="apps scroll">
-          {#each filtered as a (a.package)}
-            <div class="row app-row">
-              <div class="grow">{a.label} <span class="muted small">{a.package}</span></div>
-              <Button disabled={has(`android:${a.package}`)} onclick={() => addTarget(a.label, `android:${a.package}`)}>
-                {has(`android:${a.package}`) ? '追加済み' : '追加'}
-              </Button>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    {/if}
+    {#if error}<p class="error-text">{error}</p>{/if}
+    <div class="row">
+      <Button variant="primary" onclick={next}>次へ：制限を決める</Button>
+      <Button onclick={oncancel}>キャンセル</Button>
+    </div>
+  {:else}
+    <div class="card summary">
+      <div class="card-title">{name.trim()}</div>
+      <div class="muted small">{targets.map((t) => t.label).join('、')}</div>
+    </div>
 
-    <div class="field">
-      <span class="field-label">サイトや別の OS のアプリを追加</span>
+    <section class="editor-block">
+      <h2 class="block-title">制限（どれか 1 つでも当たると使えません）</h2>
+      {#each limits as l, i (i)}
+        <LimitEditor limit={l} onchange={(n) => (limits[i] = n)} onremove={limits.length > 1 ? () => limits.splice(i, 1) : undefined} />
+      {/each}
       <div class="row row-wrap">
-        <div class="grow"><TextInput bind:value={manualKey} placeholder="youtube.com / android:com.x / win:game.exe" autocapitalize="off" /></div>
-        <div class="manual-label"><TextInput bind:value={manualLabel} placeholder="名前（省略可）" /></div>
-        <Button onclick={addManual}>追加</Button>
+        <Button icon={Plus} onclick={() => limits.push(newLimit('daily_total'))}>1日の合計を足す</Button>
+        <Button icon={Plus} onclick={() => limits.push(newLimit('window'))}>使えない時間帯を足す</Button>
       </div>
+      <p class="muted small">例: 合計 1 時間 ＋ 毎日 6:00–7:00 は禁止 ＋ 平日は 15:00–23:00 も禁止。</p>
+    </section>
+
+    <SettingRow name="有効にする" description="外すと、このルールは働きません。">
+      {#snippet control()}
+        <div class="setting-row-control-slot"><Toggle bind:checked={enabled} label="有効にする" /></div>
+      {/snippet}
+    </SettingRow>
+
+    {#if error}<p class="error-text">{error}</p>{/if}
+    <div class="row">
+      <Button variant="primary" disabled={busy} onclick={save}>{busy ? '保存中…' : '保存'}</Button>
+      <Button onclick={() => (step = 1)}>戻る</Button>
     </div>
-  </section>
-
-  <section class="editor-block">
-    <h2 class="block-title">制限（どれか 1 つでも当たると使えません）</h2>
-    {#each limits as l, i (i)}
-      <LimitEditor limit={l} onchange={(next) => (limits[i] = next)} onremove={limits.length > 1 ? () => limits.splice(i, 1) : undefined} />
-    {/each}
-    <div class="row row-wrap">
-      <Button icon={Plus} onclick={() => limits.push(newLimit('daily_total'))}>1日の合計を足す</Button>
-      <Button icon={Plus} onclick={() => limits.push(newLimit('window'))}>使えない時間帯を足す</Button>
-    </div>
-    <p class="muted small">例: 合計 1 時間 ＋ 毎日 6:00–7:00 は禁止 ＋ 平日は 15:00–23:00 も禁止。</p>
-  </section>
-
-  <SettingRow name="有効にする" description="外すと、このルールは働きません。">
-    {#snippet control()}
-      <div class="setting-row-control-slot"><Toggle bind:checked={enabled} label="有効にする" /></div>
-    {/snippet}
-  </SettingRow>
-
-  {#if error}<p class="error-text">{error}</p>{/if}
-  <div class="row">
-    <Button variant="primary" disabled={busy} onclick={save}>{busy ? '保存中…' : '保存'}</Button>
-    <Button onclick={oncancel}>キャンセル</Button>
-  </div>
+  {/if}
 </Page>
+
+{#if picking}
+  <TargetPicker {candidates} picked={has} onpick={addTarget} onunpick={removeTarget} onclose={() => (picking = false)} />
+{/if}
 
 <style>
   .editor-block {
@@ -186,27 +170,34 @@
   .editor-for {
     margin: 0;
   }
-  .target {
-    display: inline-flex;
+  .targets {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .target-row {
+    display: flex;
     align-items: center;
-    gap: var(--space-2);
-    padding-right: var(--space-3);
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  .target-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .target-x {
     display: inline-flex;
     border: none;
     background: transparent;
     color: inherit;
-    padding: var(--space-1);
+    padding: var(--space-2);
     border-radius: var(--radius-pill);
   }
-  .apps {
-    max-height: 220px;
-  }
-  .app-row {
-    padding: var(--space-2) 0;
-  }
-  .manual-label {
-    width: 150px;
+  .summary {
+    gap: var(--space-2);
   }
 </style>

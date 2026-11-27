@@ -35,6 +35,7 @@ pub fn router() -> Router<SharedState> {
         .route("/rules/{id}", put(update_rule).delete(delete_rule))
         .route("/overrides/{id}", delete(delete_override))
         .route("/events", get(list_events))
+        .route("/icons", get(get_icon))
         .route("/ws/device", get(crate::ws::device_ws))
 }
 
@@ -228,18 +229,80 @@ async fn remove_device(
 ) -> AppResult<Json<serde_json::Value>> {
     let device = devices::get(&state.pool, &id)
         .await?
-        .filter(|d| d.user_id == user.id && d.removed_at.is_none())
+        .filter(|d| d.removed_at.is_none())
         .ok_or_else(|| AppError::not_found("デバイスがありません"))?;
+    // 本人と友達が削除できる（友達は、もう使わないデバイスの整理や、手放したデバイスの切り離し用）。どちらも友達に通知する
+    let owner = target_user(&state, &device.user_id).await?;
+    require_access(&state, &user, &owner.id, false).await?;
     devices::remove(&state.pool, &device.id).await?;
+    let by = if owner.id == user.id {
+        String::new()
+    } else {
+        format!("（{} による削除）", user.display_name)
+    };
     emit(
         &state,
-        &user.id,
+        &owner.id,
         Some(&device.id),
         EventKind::DeviceRemoved,
-        &format!("デバイス「{}」が削除されました", device.name),
+        &format!("デバイス「{}」が削除されました{by}", device.name),
     )
     .await?;
     Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+// ---- アイコン ----
+
+#[derive(Deserialize)]
+struct IconQuery {
+    key: String,
+}
+
+/// サイトのファビアイコンを取り直す間隔（取れたとき / 取れなかったとき）
+const SITE_ICON_TTL_MS: i64 = 7 * 86_400_000;
+const SITE_ICON_MISS_TTL_MS: i64 = 86_400_000;
+
+/// アイコン。アプリ（`android:...`）はデバイスが送ったもの、サイト（`domain:...`）はサーバーが取ったファビアイコン。無ければ 404。
+async fn get_icon(
+    State(state): State<SharedState>,
+    CurrentUser(_me): CurrentUser,
+    Query(q): Query<IconQuery>,
+) -> AppResult<axum::response::Response> {
+    use axum::http::{HeaderValue, StatusCode, header};
+    use axum::response::IntoResponse;
+    if !offsave_core::model::valid_key(&q.key) {
+        return Err(AppError::bad_request("識別子が不正です"));
+    }
+    let now = now_ms();
+    let mut row = crate::store::icons::get(&state.pool, &q.key).await?;
+    if let Some(domain) = q.key.strip_prefix("domain:") {
+        let fresh = row.as_ref().is_some_and(|r| {
+            let ttl = if r.data.is_some() { SITE_ICON_TTL_MS } else { SITE_ICON_MISS_TTL_MS };
+            now - r.updated_at < ttl
+        });
+        if !fresh {
+            let fetched = crate::favicon::fetch(domain).await;
+            let (mime, data) = match &fetched {
+                Some((m, d)) => (*m, Some(d.as_slice())),
+                None => ("", None),
+            };
+            crate::store::icons::put(&state.pool, &q.key, mime, data, now, None).await?;
+            row = crate::store::icons::get(&state.pool, &q.key).await?;
+        }
+    }
+    let Some((mime, data)) = row.and_then(|r| r.data.map(|d| (r.mime, d))) else {
+        return Err(AppError::not_found("アイコンがありません"));
+    };
+    Ok((
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, HeaderValue::from_str(&mime).unwrap_or(HeaderValue::from_static("application/octet-stream"))),
+            (header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=86400")),
+            (header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff")),
+        ],
+        data,
+    )
+        .into_response())
 }
 
 // ---- 状態・ルール ----

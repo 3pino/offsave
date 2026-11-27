@@ -8,6 +8,7 @@
   import { errorText } from '../lib/errors';
   import { addDays, duration } from '../lib/format';
   import { limitText, todayTotal, weekdayOfDate } from '../lib/limits';
+  import { names } from '../lib/names.svelte';
   import { session } from '../lib/session.svelte';
   import { ui } from '../lib/ui.svelte';
   import type { Rule, RuleInput, RuleStatus, User, UserStatus } from '../lib/types';
@@ -25,8 +26,22 @@
   const saved = $derived(session.saved!);
   const api = $derived(session.api!);
 
-  let people = $state<Person[]>([]);
-  let editing = $state<{ person: Person; rule: Rule | null } | null>(null);
+  let people = $state.raw<Person[]>([]);
+  // 編集中のルール。候補（対象に選べるアプリ・サイト）は、開いたときに 1 回だけ作る
+  let editing = $state.raw<{ person: Person; rule: Rule | null; candidates: { key: string; label: string }[] } | null>(null);
+
+  /** その人の対象に選べるもの: 自分ならこのデバイスのアプリ、それに加えて、その人が使ったことのあるもの */
+  function candidatesOf(p: Person): { key: string; label: string }[] {
+    const map = new Map<string, string>();
+    if (p.mine) for (const a of names.apps) map.set(`android:${a.package}`, a.label);
+    for (const l of p.status?.labels ?? []) if (!map.has(l.key)) map.set(l.key, l.label);
+    for (const u of p.status?.usage_today ?? []) if (!map.has(u.key)) map.set(u.key, names.label(u.key));
+    return [...map].map(([key, label]) => ({ key, label }));
+  }
+
+  function openEditor(person: Person, rule: Rule | null) {
+    editing = { person, rule, candidates: candidatesOf(person) };
+  }
 
   // 戻る操作（Android の戻る）で、編集を閉じる
   $effect(() => {
@@ -35,6 +50,8 @@
   });
 
   async function refresh() {
+    // 編集中は取り直さない（入力中の画面を重くしない）
+    if (editing) return;
     try {
       const friends = (await api.friends()).filter((f) => f.state === 'accepted');
       const list: { user: User; mine: boolean }[] = [
@@ -94,7 +111,7 @@
     <div class="card-title">
       <span class="grow">{rule.name}{rule.enabled ? '' : '（無効）'}</span>
       {#if !person.mine}
-        <IconButton label="編集" icon={Pencil} onclick={() => (editing = { person, rule })} />
+        <IconButton label="編集" icon={Pencil} onclick={() => openEditor(person, rule)} />
         <IconButton label="削除" icon={Trash2} onclick={() => remove(rule)} />
       {/if}
     </div>
@@ -119,7 +136,7 @@
   <RuleEditor
     ownerName={editing.person.mine ? 'あなた' : `${editing.person.user.display_name} さん`}
     initial={editing.rule}
-    usage={editing.person.status?.usage_today ?? []}
+    candidates={editing.candidates}
     onsave={save}
     oncancel={() => (editing = null)}
   />
@@ -139,7 +156,7 @@
           {:else}
             <p class="empty">ルールはまだありません。</p>
           {/each}
-          <div><Button icon={Plus} onclick={() => (editing = { person, rule: null })}>ルールを追加</Button></div>
+          <div><Button icon={Plus} onclick={() => openEditor(person, null)}>ルールを追加</Button></div>
 
           {#if !person.mine || status.overrides.length > 0}
             <h3 class="block-title">制限を外す日</h3>

@@ -1,6 +1,6 @@
 [package]
 name = "offsave-app"
-version = "0.2.0"
+version = "0.3.0"
 description = "offsave client"
 edition = "2021"
 publish = false
@@ -16,7 +16,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# devtools: 配布版でも、Ctrl+Shift+I（F12）で開発者ツールを開けるようにする
+tauri = { version = "2", features = ["devtools"] }
 # 外部リンクを、OS の既定のブラウザーで開く
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }

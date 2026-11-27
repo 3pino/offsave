@@ -5,7 +5,8 @@
   import { errorText } from '../lib/errors';
   import { session } from '../lib/session.svelte';
   import { ui } from '../lib/ui.svelte';
-  import type { Friend, UserStatus } from '../lib/types';
+  import type { DeviceInfo, Friend, UserStatus } from '../lib/types';
+  import DeviceList from './DeviceList.svelte';
   import Page from './Page.svelte';
   import PersonStatus from './PersonStatus.svelte';
 
@@ -29,6 +30,22 @@
     return () => clearInterval(t);
   });
 
+  async function removeDevice(d: DeviceInfo) {
+    const ok = await ui.confirm({
+      title: 'デバイスを削除しますか？',
+      body: `${friend.user.display_name} さんの「${d.name}」を、見守りの対象から外します（利用の記録は残ります）。本人に通知されます。このデバイスは、最後に受け取ったルールで制限を続けますが、新しいルールは届きません。`,
+      okLabel: '削除する',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.removeDevice(d.id);
+      await refresh();
+    } catch (e) {
+      ui.toast(errorText(e), 'error');
+    }
+  }
+
   async function dissolve() {
     const ok = await ui.confirm({
       title: '友達を解消しますか？',
@@ -49,7 +66,19 @@
 <Page title="{friend.user.display_name} さん" {onback}>
   <div><Button icon={ListChecks} onclick={() => ui.openRulesOf(friend.user.id)}>この人のルールを見る・変える</Button></div>
   {#if status}
+    <section class="detail-block">
+      <h2 class="block-title">デバイス</h2>
+      <DeviceList devices={status.devices} onremove={removeDevice} />
+    </section>
     <PersonStatus {status} />
   {/if}
   <div><Button variant="danger" onclick={dissolve}>友達を解消する</Button></div>
 </Page>
+
+<style>
+  .detail-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+  }
+</style>

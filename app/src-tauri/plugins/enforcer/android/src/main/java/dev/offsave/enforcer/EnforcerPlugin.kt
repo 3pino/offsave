@@ -29,6 +29,11 @@ class ConfigureArgs {
   var guardSettings: Boolean = true
 }
 
+@InvokeArg
+class AppIconArgs {
+  lateinit var pkg: String
+}
+
 /**
  * WebView（Svelte の画面）から、Android の強制の仕組みを操作する入口。
  * 命令の名前と権限は build.rs と permissions/default.toml に対応する。
@@ -140,6 +145,14 @@ class EnforcerPlugin(private val activity: Activity) : Plugin(activity) {
       .setData(Uri.parse("package:${activity.packageName}"))
     activity.startActivity(intent)
     invoke.resolve()
+  }
+
+  /** アプリのアイコン（小さな PNG を base64 にしたもの）。取れなければ png は空。選択の一覧の行を見せるときに、必要な分だけ呼ぶ。 */
+  @Command
+  fun appIcon(invoke: Invoke) {
+    val args = invoke.parseArgs(AppIconArgs::class.java)
+    val png = Icons.pngBase64(activity, args.pkg)
+    invoke.resolve(JSObject().put("png", png ?: ""))
   }
 
   /** このデバイスの起動できるアプリ（ルールの対象を選ぶのに使う）。 */

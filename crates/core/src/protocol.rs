@@ -70,6 +70,13 @@ pub struct KeyLabel {
     pub label: String,
 }
 
+/// アプリのアイコン（PNG を base64 にしたもの）。デバイスが送る。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeyIcon {
+    pub key: String,
+    pub png: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserStatus {
     pub user: User,
@@ -175,6 +182,8 @@ pub enum DeviceMsg {
         #[serde(default)]
         labels: Vec<KeyLabel>,
     },
+    /// アプリのアイコン（友達の画面で、アプリ名の横に出す）。新しいアプリを使ったときだけ送る。
+    Icons { icons: Vec<KeyIcon> },
     /// 本人の一時解除。`reason` が友達への通知の本文になる。
     Unlock {
         reason: String,

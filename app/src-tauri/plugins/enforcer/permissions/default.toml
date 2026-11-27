@@ -12,4 +12,5 @@ permissions = [
   "allow-request-notifications",
   "allow-open-app-details",
   "allow-installed-apps",
+  "allow-app-icon",
 ]

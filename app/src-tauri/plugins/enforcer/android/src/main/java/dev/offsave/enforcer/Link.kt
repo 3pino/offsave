@@ -124,7 +124,11 @@ class Link(private val agent: Agent) {
       }
 
       override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-        val why = response?.let { "HTTP ${it.code}" } ?: (t.message ?: t.javaClass.simpleName)
+        val why = when (response?.code) {
+          401 -> "このデバイスの登録が外れています（削除された可能性があります。設定の「連携を解除する」のあと、もう一度接続してください）"
+          null -> t.message ?: t.javaClass.simpleName
+          else -> "HTTP ${response.code}"
+        }
         handler.post { onLost(webSocket, why) }
       }
     })
@@ -166,14 +170,18 @@ class Link(private val agent: Agent) {
     val segments = tracker.beginUploadSegments()
     if (segments.isNotEmpty()) {
       // 初めて送るアプリの表示名を添える（友達の画面でパッケージ名の代わりに出す）
-      val labels = segments.map { it.key }.distinct()
-        .filter { it.startsWith("android:") && sentLabels.add(it) }
-        .map { JSONObject().put("key", it).put("label", agent.appLabel(it.removePrefix("android:"))) }
+      val fresh = segments.map { it.key }.distinct().filter { it.startsWith("android:") && sentLabels.add(it) }
+      val labels = fresh.map { JSONObject().put("key", it).put("label", agent.appLabel(it.removePrefix("android:"))) }
       ws.send(
         JSONObject().put("type", "usage")
           .put("segments", JSONArray(segments.map(Wire::segmentJson)))
           .put("labels", JSONArray(labels)).toString(),
       )
+      // アイコンも、初めて送るアプリだけ（友達の画面で、アプリ名の横に出す）
+      val icons = fresh.mapNotNull { key ->
+        Icons.pngBase64(agent.context, key.removePrefix("android:"))?.let { JSONObject().put("key", key).put("png", it) }
+      }
+      if (icons.isNotEmpty()) ws.send(JSONObject().put("type", "icons").put("icons", JSONArray(icons)).toString())
     }
     for (r in pendingReports.toList()) ws.send(r.toString())
     pendingReports.clear()

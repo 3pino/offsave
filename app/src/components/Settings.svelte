@@ -3,6 +3,9 @@
   import CircleCheck from '@lucide/svelte/icons/circle-check';
   import CircleAlert from '@lucide/svelte/icons/circle-alert';
   import Download from '@lucide/svelte/icons/download';
+  import Eye from '@lucide/svelte/icons/eye';
+  import ShieldCheck from '@lucide/svelte/icons/shield-check';
+  import Smartphone from '@lucide/svelte/icons/smartphone';
   import Button from '@3pino/ui-kit-web/Button.svelte';
   import Section from '@3pino/ui-kit-web/Section.svelte';
   import SettingRow from '@3pino/ui-kit-web/SettingRow.svelte';
@@ -12,11 +15,15 @@
   import { clock } from '../lib/format';
   import { parseTime } from '../lib/limits';
   import { isAndroid, native } from '../lib/native';
+  import { protection } from '../lib/protection.svelte';
   import { session } from '../lib/session.svelte';
   import { ui } from '../lib/ui.svelte';
   import { RELEASES_URL, updater } from '../lib/updater.svelte';
   import type { UserSettings } from '../lib/types';
   import Page from './Page.svelte';
+  import ProtectionPanel from './ProtectionPanel.svelte';
+  import SettingsDevices from './SettingsDevices.svelte';
+  import SettingsHidden from './SettingsHidden.svelte';
 
   const saved = $derived(session.saved!);
   const api = $derived(session.api!);
@@ -61,6 +68,13 @@
     void saveSettings({ ...settings, day_boundary_min: min });
   }
 
+  // サブ画面を開いている間は、戻る操作（Android の戻る）で閉じる
+  $effect(() => {
+    if (!ui.settingsSub) return;
+    return ui.pushLayer(() => (ui.settingsSub = null));
+  });
+  const closeSub = () => (ui.settingsSub = null);
+
   async function unlink() {
     const ok = await ui.confirm({
       title: '連携を解除しますか？',
@@ -82,10 +96,31 @@
   const percent = $derived(st.kind === 'downloading' && st.total ? Math.floor((st.downloaded / st.total) * 100) : null);
 </script>
 
+{#if ui.settingsSub === 'protection'}
+  <Page title="このデバイスの保護" onback={closeSub}>
+    <ProtectionPanel />
+  </Page>
+{:else if ui.settingsSub === 'devices'}
+  <SettingsDevices onback={closeSub} onunlink={unlink} />
+{:else if ui.settingsSub === 'hidden'}
+  <SettingsHidden onback={closeSub} />
+{:else}
 <Page title="設定">
   <Section title="アカウント">
     <SettingRow name={saved.userName} description="Tailscale のアカウントで、自動でログインしています。" />
     <SettingRow name="サーバー" description={saved.serverUrl} />
+  </Section>
+
+  <Section title="このアプリ">
+    {#if isAndroid}
+      <SettingRow name="このデバイスの保護" description="Accessibility・デバイス管理者・電池・通知、サーバーとの接続" icon={ShieldCheck} onclick={() => (ui.settingsSub = 'protection')}>
+        {#snippet control()}
+          {#if protection.incomplete}<span class="pill pill-bad">要対応</span>{/if}
+        {/snippet}
+      </SettingRow>
+    {/if}
+    <SettingRow name="デバイス" description="登録したデバイスの一覧と、削除" icon={Smartphone} onclick={() => (ui.settingsSub = 'devices')} />
+    <SettingRow name="今日の利用の表示" description="ホーム画面のアプリなど、一覧に出さないもの" icon={Eye} onclick={() => (ui.settingsSub = 'hidden')} />
   </Section>
 
   <Section title="日付と時間">
@@ -147,6 +182,7 @@
     <div><Button variant="danger" onclick={unlink}>連携を解除する</Button></div>
   </Section>
 </Page>
+{/if}
 
 <style>
   .update-state {
