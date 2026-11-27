@@ -8,6 +8,8 @@ permissions = [
   "allow-status",
   "allow-open-accessibility-settings",
   "allow-open-usage-access-settings",
+  "allow-open-notification-settings",
+  "allow-grant-with-shizuku",
   "allow-request-device-admin",
   "allow-request-battery-exemption",
   "allow-request-notifications",

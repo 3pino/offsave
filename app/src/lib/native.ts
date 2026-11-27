@@ -20,6 +20,9 @@ export const native = {
   clear: () => call<NativeStatus>('clear'),
   openAccessibilitySettings: () => call<void>('open_accessibility_settings'),
   openUsageAccessSettings: () => call<void>('open_usage_access_settings'),
+  openNotificationSettings: () => call<void>('open_notification_settings'),
+  /** Shizuku で「設定の書き込みの権限」を付ける。ok / not_running / too_old / denied / failed */
+  grantWithShizuku: async () => (await call<{ result: string }>('grant_with_shizuku')).result,
   requestDeviceAdmin: () => call<void>('request_device_admin'),
   requestBatteryExemption: () => call<void>('request_battery_exemption'),
   requestNotifications: () => call<void>('request_notifications'),

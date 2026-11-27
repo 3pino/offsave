@@ -15,6 +15,8 @@
 
     <!-- ルールの対象を選ぶために、起動できるアプリの一覧を見る -->
     <queries>
+        <!-- Shizuku が入っているかを見る -->
+        <package android:name="moe.shizuku.privileged.api" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -28,6 +30,15 @@
     </queries>
 
     <application>
+        <!-- Shizuku が、このアプリにつながるための窓口 -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
         <!-- サーバーとの接続を保つ常駐サービス（友達どうしの合意の上で、利用状況を共有する用途） -->
         <service
             android:name="dev.offsave.enforcer.AgentService"

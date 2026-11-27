@@ -158,11 +158,16 @@ async fn handle(
             if prev.state != "new" {
                 let before = prev.flags();
                 if before.protected() && !flags.protected() {
-                    emit(state, &user.id, Some(device_id), EventKind::ProtectionDisabled,
-                        &format!("{}: {}", prev.name, lost_protection(&before, &flags))).await?;
+                    // アプリの更新や再起動で、一瞬だけ外れることがある。少し待って、まだ外れているときだけ知らせる
+                    state.pending_loss.lock().unwrap().insert(device_id.to_owned());
+                    spawn_loss_check(state.clone(), user.id.clone(), device_id.to_owned(), before);
                 } else if !before.protected() && flags.protected() {
-                    emit(state, &user.id, Some(device_id), EventKind::ProtectionRestored,
-                        &format!("{} の保護が有効になりました", prev.name)).await?;
+                    // 猛予のうちに戻った（「無効」をまだ知らせていない）ときは、どちらも知らせない
+                    let quiet = state.pending_loss.lock().unwrap().remove(device_id);
+                    if !quiet {
+                        emit(state, &user.id, Some(device_id), EventKind::ProtectionRestored,
+                            &format!("{} の保護が有効になりました", prev.name)).await?;
+                    }
                 }
             }
 
@@ -267,6 +272,39 @@ async fn handle(
             Ok(vec![])
         }
     }
+}
+
+/// 保護が外れているのが猛予（`protection_grace_ms`）を超えて続いていたら、友達に知らせる。
+fn spawn_loss_check(state: SharedState, user_id: String, device_id: String, before: DeviceFlags) {
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(state.config.protection_grace_ms)).await;
+        // 猛予の間に戻っていれば、もう消えている
+        if !state.pending_loss.lock().unwrap().remove(&device_id) {
+            return;
+        }
+        let Ok(Some(device)) = devices::get(&state.pool, &device_id).await else {
+            return;
+        };
+        let after = device.flags();
+        if after.protected() {
+            return;
+        }
+        let mut what = lost_protection(&before, &after);
+        if what.is_empty() {
+            what = "Accessibility が無効になりました".into();
+        }
+        if let Err(e) = emit(
+            &state,
+            &user_id,
+            Some(&device_id),
+            EventKind::ProtectionDisabled,
+            &format!("{}: {what}", device.name),
+        )
+        .await
+        {
+            tracing::warn!("保護の無効化の通知に失敗: {e:?}");
+        }
+    });
 }
 
 fn lost_protection(before: &DeviceFlags, now: &DeviceFlags) -> String {

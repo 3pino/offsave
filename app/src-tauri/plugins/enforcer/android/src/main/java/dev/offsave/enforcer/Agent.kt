@@ -185,8 +185,9 @@ class Agent private constructor(context: Context) {
     val now = now()
     val d = tracker.decide(now)
 
-    // 制限に達したとき、どのアプリ・サイトかを友達に伝える
+    // 制限に達したとき、どのアプリ・サイトかを友達に伝える。使えない時間帯は、決まった時刻になるだけなので伝えない（合計時間だけ）
     for ((graceKey, _) in d.newGraces) {
+      if (tracker.limitKindOf(graceKey) == BlockKind.WINDOW) continue
       val ruleId = graceKey.substringBefore('|')
       val name = tracker.ruleName(ruleId) ?: "制限"
       val subject = tracker.graceSubjects[graceKey] ?: tracker.foregroundKey ?: ""

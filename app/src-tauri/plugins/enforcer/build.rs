@@ -5,6 +5,8 @@ const COMMANDS: &[&str] = &[
     "status",
     "open_accessibility_settings",
     "open_usage_access_settings",
+    "open_notification_settings",
+    "grant_with_shizuku",
     "request_device_admin",
     "request_battery_exemption",
     "request_notifications",

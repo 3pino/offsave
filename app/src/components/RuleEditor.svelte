@@ -35,6 +35,9 @@
   // 編集の開始時の値だけを使う（あとから props が変わっても、入力中の内容は消さない）
   const init = untrack(() => initial);
 
+  /** 自分のルールを直すとき（厳しくする変更だけ保存できる） */
+  const selfEdit = untrack(() => ownerName === 'あなた') && init !== null;
+
   let step = $state<1 | 2>(1);
   let name = $state(init?.name ?? '');
   let enabled = $state(init?.enabled ?? true);
@@ -100,6 +103,9 @@
       <span class="field-label">ルールの名前</span>
       <TextInput bind:value={name} placeholder="例: ゲーム" />
     </label>
+    {#if selfEdit}
+      <p class="muted small">自分でできるのは、厳しくする変更だけです（名前の変更・対象や制限の追加・曜日の追加・1 日の合計時間の短縮・使えない時間帯の拡大）。緩める変更は友達に頂んでください。</p>
+    {/if}
 
     <section class="editor-block">
       <h2 class="block-title">対象（合計で数えます）</h2>

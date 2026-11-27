@@ -17,6 +17,9 @@ pub struct Config {
     pub default_timezone: String,
     /// ハートビートがこの時間（ミリ秒）途絶えたら「疑い」にする（`OFFSAVE_SUSPECT_AFTER_SECS`、既定 600 秒）。
     pub suspect_after_ms: i64,
+    /// 保護が外れてから友達に知らせるまでの猛予（ミリ秒、`OFFSAVE_PROTECTION_GRACE_SECS`、既定 15 秒）。
+    /// アプリの更新や再起動で、一瞬外れてすぐ戻るときに、知らせないため。
+    pub protection_grace_ms: u64,
     /// 一時解除の長さ（分）。
     pub unlock_minutes: u32,
 }
@@ -38,6 +41,13 @@ impl Config {
             None => 600,
         };
 
+        let grace_secs = match var("OFFSAVE_PROTECTION_GRACE_SECS") {
+            Some(v) => v
+                .parse::<u64>()
+                .map_err(|_| format!("OFFSAVE_PROTECTION_GRACE_SECS が不正です（{v}）"))?,
+            None => 15,
+        };
+
         Ok(Self {
             data_dir: var("OFFSAVE_DATA_DIR")
                 .unwrap_or_else(|| "./data".into())
@@ -49,6 +59,7 @@ impl Config {
                 .unwrap_or_else(default_tailscale_socket),
             default_timezone: var("OFFSAVE_DEFAULT_TZ").unwrap_or_else(|| "Asia/Tokyo".into()),
             suspect_after_ms: suspect_secs * 1000,
+            protection_grace_ms: grace_secs * 1000,
             unlock_minutes: offsave_core::protocol::UNLOCK_MINUTES,
         })
     }

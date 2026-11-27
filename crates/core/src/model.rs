@@ -125,6 +125,85 @@ impl Rule {
     }
 }
 
+impl Limit {
+    /// `self` は `old` と同じか、それより厳しいか（`old` が当たるときは必ず `self` も当たるか）。
+    /// 同じ種類どうしだけを比べる（種類をまたいだ置き換えは、緩めるかどうかを判断しない）。
+    pub fn is_at_least_as_strict_as(&self, old: &Limit) -> bool {
+        match (self, old) {
+            (
+                Limit::DailyTotal { days, seconds },
+                Limit::DailyTotal {
+                    days: old_days,
+                    seconds: old_seconds,
+                },
+            ) => days & old_days == *old_days && seconds <= old_seconds,
+            (
+                Limit::Window {
+                    days,
+                    start_min,
+                    end_min,
+                },
+                Limit::Window {
+                    days: old_days,
+                    start_min: old_start,
+                    end_min: old_end,
+                },
+            ) => {
+                // 日をまたぐ時間帯は終わりを +24 時間して、「開始の日からの範囲」で比べる
+                let span = |s: u16, e: u16| (s as u32, if e > s { e as u32 } else { e as u32 + 1440 });
+                let (s, e) = span(*start_min, *end_min);
+                let (os, oe) = span(*old_start, *old_end);
+                days & old_days == *old_days && s <= os && e >= oe
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Rule {
+    /// このルールが、変更前の `old` を緩めていないか。緩めているときは、その理由を返す。
+    ///
+    /// 緩めない変更（本人もできる）: 名前の変更、対象の追加、制限の追加、制限の曜日の追加、
+    /// 1 日の合計時間の短縮、使えない時間帯の拡大。無効のルールを有効にするのも厳しくする変更。
+    pub fn check_not_looser_than(&self, old: &Rule) -> Result<(), String> {
+        if old.enabled && !self.enabled {
+            return Err("ルールを無効にするのは、友達だけができます".into());
+        }
+        // 対象は、減らせない（同じ対象は、識別子を減らさない限り名前の変更も可）
+        for t in &old.targets {
+            let kept = t
+                .keys
+                .iter()
+                .all(|k| self.targets.iter().any(|n| n.keys.iter().any(|nk| nk == k)));
+            if !kept {
+                return Err("対象を減らすのは、友達だけができます".into());
+            }
+        }
+        // 元の制限を、それぞれ別々の「同じか厳しい制限」が引き継いでいること
+        let mut taken: Vec<Option<usize>> = vec![None; self.limits.len()];
+        fn assign(i: usize, old: &[Limit], new: &[Limit], taken: &mut [Option<usize>], seen: &mut [bool]) -> bool {
+            for j in 0..new.len() {
+                if seen[j] || !new[j].is_at_least_as_strict_as(&old[i]) {
+                    continue;
+                }
+                seen[j] = true;
+                if taken[j].is_none_or(|k| assign(k, old, new, taken, seen)) {
+                    taken[j] = Some(i);
+                    return true;
+                }
+            }
+            false
+        }
+        for i in 0..old.limits.len() {
+            let mut seen = vec![false; self.limits.len()];
+            if !assign(i, &old.limits, &self.limits, &mut taken, &mut seen) {
+                return Err("制限を緩める変更は、友達だけができます（時間の延長・曜日や時間帯の縮小・制限の削除）".into());
+            }
+        }
+        Ok(())
+    }
+}
+
 /// `android:` `win:` `linux:` `domain:` のいずれかで始まり、空白と制御文字を含まない。
 pub fn valid_key(k: &str) -> bool {
     let Some((prefix, rest)) = k.split_once(':') else {
@@ -196,6 +275,84 @@ mod tests {
         r.limits.pop();
         r.targets[0].keys[0] = "bad key".into();
         assert!(r.validate().is_err());
+    }
+
+    fn rule(targets: &[&str], limits: Vec<Limit>) -> Rule {
+        Rule {
+            id: "r".into(),
+            name: "ゲーム".into(),
+            targets: targets
+                .iter()
+                .map(|k| Target {
+                    label: (*k).into(),
+                    keys: vec![format!("android:{k}")],
+                })
+                .collect(),
+            limits,
+            enabled: true,
+        }
+    }
+    fn total(days: u8, seconds: u32) -> Limit {
+        Limit::DailyTotal { days, seconds }
+    }
+    fn window(days: u8, start_min: u16, end_min: u16) -> Limit {
+        Limit::Window { days, start_min, end_min }
+    }
+
+    #[test]
+    fn changes_that_do_not_loosen_are_allowed() {
+        let old = rule(&["com.a"], vec![total(0b0011111, 3600), window(ALL_DAYS, 1320, 360)]);
+        let ok = |new: &Rule| assert_eq!(new.check_not_looser_than(&old), Ok(()), "{new:?}");
+        // 名前
+        let mut renamed = old.clone();
+        renamed.name = "あとで直した".into();
+        ok(&renamed);
+        // 対象の追加
+        ok(&rule(&["com.a", "com.b"], old.limits.clone()));
+        // 制限の追加
+        let mut more = old.limits.clone();
+        more.push(total(ALL_DAYS, 60));
+        ok(&rule(&["com.a"], more));
+        // 曜日の追加
+        ok(&rule(&["com.a"], vec![total(ALL_DAYS, 3600), window(ALL_DAYS, 1320, 360)]));
+        // 1 日の合計時間の短縮
+        ok(&rule(&["com.a"], vec![total(0b0011111, 1800), window(ALL_DAYS, 1320, 360)]));
+        // 使えない時間の増加（前後に広げる。日をまたぐものも）
+        ok(&rule(&["com.a"], vec![total(0b0011111, 3600), window(ALL_DAYS, 1260, 420)]));
+        // 順番が変わってもよい
+        ok(&rule(&["com.a"], vec![window(ALL_DAYS, 1320, 360), total(0b0011111, 3600)]));
+        // 無効のルールを有効にする
+        let mut off = old.clone();
+        off.enabled = false;
+        let mut on = old.clone();
+        on.enabled = true;
+        assert_eq!(on.check_not_looser_than(&off), Ok(()));
+    }
+
+    #[test]
+    fn changes_that_loosen_are_refused() {
+        let old = rule(&["com.a"], vec![total(ALL_DAYS, 3600), window(0b0011111, 1320, 360)]);
+        let no = |new: &Rule| assert!(new.check_not_looser_than(&old).is_err(), "{new:?}");
+        // 対象を減らす・入れ替える
+        no(&rule(&["com.b"], old.limits.clone()));
+        // 制限を消す
+        no(&rule(&["com.a"], vec![total(ALL_DAYS, 3600)]));
+        // 合計時間を延ばす
+        no(&rule(&["com.a"], vec![total(ALL_DAYS, 7200), window(0b0011111, 1320, 360)]));
+        // 曜日を減らす
+        no(&rule(&["com.a"], vec![total(0b0011111, 3600), window(0b0011111, 1320, 360)]));
+        // 時間帯を狭める
+        no(&rule(&["com.a"], vec![total(ALL_DAYS, 3600), window(0b0011111, 1380, 360)]));
+        no(&rule(&["com.a"], vec![total(ALL_DAYS, 3600), window(0b0011111, 1320, 300)]));
+        // 1 つの制限で、元の 2 つを一度に引き継げない（種類をまたいでもだめ）
+        no(&rule(&["com.a"], vec![total(ALL_DAYS, 60)]));
+        // 無効にする
+        let mut off = old.clone();
+        off.enabled = false;
+        no(&off);
+        // 同じ制限を 2 つに分けて、片方を緩めるのもだめ
+        let two = rule(&["com.a"], vec![total(ALL_DAYS, 3600), total(ALL_DAYS, 3600)]);
+        assert!(rule(&["com.a"], vec![total(ALL_DAYS, 3600), total(ALL_DAYS, 7200)]).check_not_looser_than(&two).is_err());
     }
 
     #[test]

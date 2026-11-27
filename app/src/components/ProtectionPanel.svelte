@@ -4,21 +4,56 @@
   import Button from '@3pino/ui-kit-web/Button.svelte';
   import SettingRow from '@3pino/ui-kit-web/SettingRow.svelte';
   import StatusLine from '@3pino/ui-kit-web/StatusLine.svelte';
+  import { errorText } from '../lib/errors';
   import { dateTime } from '../lib/format';
   import { native } from '../lib/native';
   import { protection } from '../lib/protection.svelte';
   import { session } from '../lib/session.svelte';
   import { ui } from '../lib/ui.svelte';
 
-  /** 設定の書き込みの権限を付ける adb のコマンド */
-  const adbCommand = $derived(`adb shell pm grant ${protection.ns?.packageName ?? 'dev.offsave.app'} android.permission.WRITE_SECURE_SETTINGS`);
+  // 「設定の書き込みの権限」（WRITE_SECURE_SETTINGS）を付ける方法。Shizuku か、PC と USB でつないで adb
+  type Os = 'windows' | 'mac' | 'linux';
+  let os = $state<Os>('windows');
+  let granting = $state(false);
 
-  async function copyCommand() {
+  const grantCommand = $derived(
+    `adb devices\nadb shell pm grant ${protection.ns?.packageName ?? 'dev.offsave.app'} android.permission.WRITE_SECURE_SETTINGS`,
+  );
+  /** adb（Android SDK Platform-Tools）を入れるコマンド（初回だけ） */
+  const INSTALL: Record<Os, string> = {
+    windows: 'winget install --id Google.PlatformTools',
+    mac: 'brew install --cask android-platform-tools',
+    linux: 'sudo apt install adb',
+  };
+  const OS_LABEL: Record<Os, string> = { windows: 'Windows', mac: 'macOS', linux: 'Linux' };
+
+  async function copy(text: string) {
     try {
-      await navigator.clipboard.writeText(adbCommand);
+      await navigator.clipboard.writeText(text);
       ui.toast('コピーしました');
     } catch {
       ui.toast('コピーできませんでした。画面の文字を選んでコピーしてください', 'error');
+    }
+  }
+
+  const SHIZUKU_MESSAGE: Record<string, string> = {
+    not_running: 'Shizuku が動いていません。Shizuku のアプリを開いて、開始してからもう一度試してください',
+    too_old: 'Shizuku が古いです。更新してからもう一度試してください',
+    denied: 'Shizuku で許可されませんでした。Shizuku のアプリで、offsave を許可してください',
+    failed: '付けられませんでした。下の PC の手順で付けてください',
+  };
+
+  async function grantWithShizuku() {
+    granting = true;
+    try {
+      const r = await native.grantWithShizuku();
+      if (r === 'ok') ui.toast('付けました');
+      else ui.toast(SHIZUKU_MESSAGE[r] ?? '付けられませんでした', 'error');
+    } catch (e) {
+      ui.toast(errorText(e), 'error');
+    } finally {
+      granting = false;
+      await protection.refresh();
     }
   }
 
@@ -64,6 +99,22 @@
             action: ns.notifications ? null : { label: '許可する', run: native.requestNotifications },
             hint: '',
           },
+          {
+            ok: ns.canWriteSecure,
+            title: '設定の書き込みの権限（決済アプリなどのための一時停止）',
+            action: null,
+            hint: ns.canWriteSecure
+              ? ''
+              : ns.pauseApps > 0
+                ? '友達が決めたアプリ（決済アプリなど）を使うには、この権限が必要です。下の方法で付けてください。'
+                : 'PayPay など、Accessibility が有効だと使えないアプリを使うときだけ必要です（いまは無くても動きます）。',
+          },
+          {
+            ok: ns.usageAccess,
+            title: '使用状況へのアクセス（一時停止中に、前面のアプリを見る）',
+            action: ns.usageAccess ? null : { label: '許可する', run: native.openUsageAccessSettings },
+            hint: '',
+          },
         ]
       : [],
   );
@@ -100,26 +151,38 @@
     <div><Button onclick={() => native.openAppDetails()}>アプリ情報（制限された設定の許可）</Button></div>
   {/if}
 
-  <!-- 友達が「保護を一時停止するアプリ」を決めているときだけ、その準備を出す -->
-  {#if ns.pauseApps > 0}
-    <h2 class="block-title">保護の一時停止の準備</h2>
-    <SettingRow
-      name="設定の書き込みの権限"
-      description="PC と USB でつないで、次のコマンドを 1 回実行します（アンインストールするまで有効）。"
-      icon={ns.canWriteSecure ? CircleCheck : CircleX}
-    />
-    {#if !ns.canWriteSecure}
-      <code class="selectable adb-command">{adbCommand}</code>
-      <div><Button onclick={copyCommand}>コマンドをコピー</Button></div>
-    {/if}
-    <SettingRow name="使用状況へのアクセス" icon={ns.usageAccess ? CircleCheck : CircleX}>
-      {#snippet control()}
-        <div class="setting-row-control-slot">
-          {#if !ns.usageAccess}<Button variant="primary" onclick={() => native.openUsageAccessSettings()}>許可する</Button>{/if}
-        </div>
-      {/snippet}
-    </SettingRow>
+  {#if !ns.canWriteSecure}
+    <h2 class="block-title">設定の書き込みの権限を付ける</h2>
+    <p class="muted small">付けるのは 1 回だけです（offsave をアンインストールするまで有効）。更新しても消えません。</p>
+
+    <h3 class="sub-title">方法 1: Shizuku（PC なし）</h3>
+    <p class="muted small">
+      {ns.shizuku ? 'Shizuku が動いています。' : 'Shizuku が動いていません（入れていない場合は、方法 2 で付けられます）。'}
+      付けるときだけ使い、付けたあとは Shizuku を止めても構いません。
+    </p>
+    <div><Button variant="primary" disabled={granting} onclick={grantWithShizuku}>Shizuku で付ける</Button></div>
+
+    <h3 class="sub-title">方法 2: PC と USB（adb）</h3>
+    <ol class="steps muted small">
+      <li>「設定 → デバイス情報」で「ビルド番号」を 7 回タップして、「開発者向けオプション」を出す。</li>
+      <li>「開発者向けオプション」で「USB デバッグ」をオンにして、PC と USB でつなぐ。「USB デバッグを許可しますか？」と出たら許可する。</li>
+      <li>PC に adb が無ければ、入れる（初回だけ。入れたあとは、ターミナルを開き直す）。</li>
+      <li>次のコマンドを実行する。</li>
+    </ol>
+    <div class="row os-tabs">
+      {#each Object.keys(OS_LABEL) as o (o)}
+        <Button variant={os === o ? 'primary' : 'default'} onclick={() => (os = o as Os)}>{OS_LABEL[o as Os]}</Button>
+      {/each}
+    </div>
+    <p class="muted small">adb を入れる</p>
+    <code class="selectable adb-command">{INSTALL[os]}</code>
+    <div><Button onclick={() => copy(INSTALL[os])}>コピー</Button></div>
+    <p class="muted small">権限を付ける（スマホが見えているかを確かめてから、付けます）</p>
+    <code class="selectable adb-command">{grantCommand}</code>
+    <div><Button onclick={() => copy(grantCommand)}>コピー</Button></div>
   {/if}
+
+  <div><Button onclick={() => native.openNotificationSettings()}>通知の種類ごとの設定</Button></div>
 {:else if protection.error}
   <p class="error-text">{protection.error}</p>
 {:else}
@@ -127,7 +190,19 @@
 {/if}
 
 <style>
+  .sub-title {
+    margin: var(--space-5) 0 var(--space-2);
+    font-size: var(--fs-md);
+  }
+  .steps {
+    margin: 0;
+    padding-left: var(--space-6);
+  }
+  .os-tabs {
+    gap: var(--space-3);
+  }
   .adb-command {
+    white-space: pre-wrap;
     display: block;
     padding: var(--space-4) var(--space-5);
     border: 1px solid var(--border);

@@ -27,6 +27,7 @@ impl DevServer {
             tailscale_socket: "/nonexistent".into(),
             default_timezone: "Asia/Tokyo".into(),
             suspect_after_ms: 180_000,
+            protection_grace_ms: 100,
             unlock_minutes: offsave_core::protocol::UNLOCK_MINUTES,
         };
         tweak(&mut config);

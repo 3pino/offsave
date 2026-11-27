@@ -91,6 +91,7 @@ class EnforcerPlugin(private val activity: Activity) : Plugin(activity) {
     o.put("deviceAdmin", f.deviceAdmin)
     o.put("paused", f.paused)
     o.put("canWriteSecure", a.pause.canWriteSecure)
+    o.put("shizuku", ShizukuGrant.running())
     o.put("usageAccess", a.pause.hasUsageAccess)
     o.put("pauseApps", a.tracker.policy?.pauseApps?.size ?: 0)
     o.put("packageName", activity.packageName)
@@ -158,6 +159,22 @@ class EnforcerPlugin(private val activity: Activity) : Plugin(activity) {
     if (android.os.Build.VERSION.SDK_INT >= 33) {
       ActivityCompat.requestPermissions(activity, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 7001)
     }
+    invoke.resolve()
+  }
+
+  /** Shizuku で、「設定の書き込みの権限」を付ける。結果は result（ok / not_running / too_old / denied / failed）。 */
+  @Command
+  fun grantWithShizuku(invoke: Invoke) {
+    ShizukuGrant.grant(activity) { r -> invoke.resolve(JSObject().put("result", r.code)) }
+  }
+
+  /** 通知の設定（種類ごとのチャンネルをここで変えられる）。 */
+  @Command
+  fun openNotificationSettings(invoke: Invoke) {
+    Notices.ensureChannels(activity)
+    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+      .putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
+    activity.startActivity(intent)
     invoke.resolve()
   }
 

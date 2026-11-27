@@ -1,6 +1,7 @@
 //! アプリケーション全体で共有する状態。
 
-use std::sync::Arc;
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 
 use sqlx::SqlitePool;
 
@@ -16,6 +17,8 @@ pub struct AppState {
     pub tailscale: Tailscale,
     /// 自動更新で入れ替えたあとの、再起動の要求。
     pub restart: Restart,
+    /// 保護が外れたが、まだ友達に知らせていない（猛予中の）デバイス。
+    pub pending_loss: Mutex<HashSet<String>>,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -29,6 +32,7 @@ impl AppState {
             hub: Hub::default(),
             tailscale,
             restart: Restart::default(),
+            pending_loss: Mutex::default(),
         }
     }
 }

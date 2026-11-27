@@ -41,6 +41,9 @@ dependencies {
     implementation("androidx.core:core-ktx:${versions.getProperty("androidx.core")}")
     // WebSocket クライアント（Android の標準ライブラリにはない）
     implementation("com.squareup.okhttp3:okhttp:${versions.getProperty("okhttp")}")
+    // Shizuku があるとき、「設定の書き込みの権限」をワンボタンで付ける
+    implementation("dev.rikka.shizuku:api:${versions.getProperty("shizuku")}")
+    implementation("dev.rikka.shizuku:provider:${versions.getProperty("shizuku")}")
     implementation(project(":tauri-android"))
     testImplementation("junit:junit:${versions.getProperty("junit")}")
     // JVM の試験では Android の org.json が使えないので、同じ API の実装を入れる

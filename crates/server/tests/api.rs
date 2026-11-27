@@ -231,9 +231,20 @@ async fn permissions_on_rules_and_status() {
     assert_eq!(code, 200, "{rule}");
     let rule_id = rule["id"].as_str().unwrap().to_owned();
 
-    // 本人は変更・削除できない（緩める操作は友達だけ）
-    assert_eq!(alice.put(&format!("/rules/{rule_id}"), game_rule(99999)).await.0, 403);
+    // 本人は、緩める変更・削除はできない（友達だけ）。厳しくする変更はできる
+    assert_eq!(alice.put(&format!("/rules/{rule_id}"), game_rule(7200)).await.0, 403);
     assert_eq!(alice.delete(&format!("/rules/{rule_id}")).await.0, 403);
+    let stricter = alice.put(&format!("/rules/{rule_id}"), game_rule(1800)).await;
+    assert_eq!(stricter.0, 200, "{}", stricter.1);
+    let mut renamed = game_rule(1800);
+    renamed["name"] = json!("名前だけ変えた");
+    renamed["targets"] = json!([{ "label": "ゲーム", "keys": ["android:com.example.game"] }, { "label": "もう一つ", "keys": ["android:com.other"] }]);
+    assert_eq!(alice.put(&format!("/rules/{rule_id}"), renamed).await.0, 200);
+    // 変更は友達に通知される
+    let events: Vec<Event> = serde_json::from_value(bob.get("/events").await.1).unwrap();
+    assert!(events.iter().any(|e| e.kind == EventKind::RuleChanged && e.message.contains("変更")));
+    // 友達が元の強さに戻す
+    assert_eq!(bob.put(&format!("/rules/{rule_id}"), game_rule(3600)).await.0, 200);
     assert_eq!(
         alice
             .post(&format!("/users/{a_id}/overrides"), json!({ "date": "2099-01-01" }))
@@ -571,7 +582,7 @@ async fn only_a_friend_sets_the_apps_that_pause_protection_and_pausing_is_not_a_
     assert!(!events.iter().any(|e| e.kind == EventKind::ProtectionDisabled));
     // でも、一時停止のふりをしない Accessibility の欠落は通知される
     phone.heartbeat(DeviceFlags { accessibility: false, ..protected() }).await;
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
     let events: Vec<Event> = serde_json::from_value(bob.get("/events").await.1).unwrap();
     assert!(events.iter().any(|e| e.kind == EventKind::ProtectionDisabled));
 
@@ -586,6 +597,36 @@ async fn only_a_friend_sets_the_apps_that_pause_protection_and_pausing_is_not_a_
     // 外すと、ポリシーからも消える
     assert_eq!(bob.put(&path, json!({ "keys": [] })).await.0, 200);
     phone.heartbeat_until(protected(), |p| p.pause_apps.is_empty()).await;
+}
+
+#[tokio::test]
+async fn a_blip_in_protection_is_not_reported_but_a_lasting_loss_is() {
+    let s = DevServer::start_with(|c| c.protection_grace_ms = 700).await;
+    let (alice, bob) = (Client::new(&s, "alice@t"), Client::new(&s, "bob@t"));
+    make_friends(&alice, &bob).await;
+    let mut phone = alice.device("phone").await;
+    phone.heartbeat(protected()).await;
+
+    // アプリの更新などで一瞬外れてすぐ戻る。どちらも知らせない
+    phone.heartbeat(DeviceFlags { accessibility: false, ..protected() }).await;
+    phone.heartbeat(protected()).await;
+    tokio::time::sleep(Duration::from_millis(1_200)).await;
+    let kinds = |v: Value| -> Vec<EventKind> {
+        serde_json::from_value::<Vec<Event>>(v).unwrap().into_iter().map(|e| e.kind).collect()
+    };
+    let seen = kinds(bob.get("/events").await.1);
+    assert!(!seen.contains(&EventKind::ProtectionDisabled), "{seen:?}");
+    assert!(!seen.contains(&EventKind::ProtectionRestored), "{seen:?}");
+
+    // 猛予を超えて外れたままなら、知らせる。戻ったときも知らせる
+    phone.heartbeat(DeviceFlags { accessibility: false, ..protected() }).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(!kinds(bob.get("/events").await.1).contains(&EventKind::ProtectionDisabled));
+    tokio::time::sleep(Duration::from_millis(900)).await;
+    assert!(kinds(bob.get("/events").await.1).contains(&EventKind::ProtectionDisabled));
+    phone.heartbeat(protected()).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(kinds(bob.get("/events").await.1).contains(&EventKind::ProtectionRestored));
 }
 
 #[tokio::test]

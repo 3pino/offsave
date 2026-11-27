@@ -435,10 +435,17 @@ async fn update_rule(
     let stored = rules::get(&state.pool, &id)
         .await?
         .ok_or_else(|| AppError::not_found("ルールがありません"))?;
-    require_access(&state, &me, &stored.owner_id, true).await?;
-    let owner = target_user(&state, &stored.owner_id).await?;
+    let is_owner = me.id == stored.owner_id;
+    if !is_owner {
+        require_access(&state, &me, &stored.owner_id, true).await?;
+    }
     let mut rule = body.into_rule()?;
     rule.id = id.clone();
+    if is_owner {
+        // 本人は、ルールを緩めない変更だけできる
+        rule.check_not_looser_than(&stored.rule).map_err(AppError::forbidden)?;
+    }
+    let owner = target_user(&state, &stored.owner_id).await?;
     rules::update(&state.pool, &id, &rule).await?;
     rule_changed(&state, &owner, &me, &format!("ルール「{}」を変更しました", rule.name)).await?;
     Ok(Json(rule))

@@ -76,6 +76,7 @@ OFFSAVE_BIND=<Tailscale の IP>:8090 OFFSAVE_DATA_DIR=/var/lib/offsave ./target/
 | `OFFSAVE_DEV` | なし | `1` で開発モード（認証をしない。`X-Dev-User` ヘッダーで誰にでもなれる）。**本番では使わない** |
 | `OFFSAVE_DEFAULT_TZ` | `Asia/Tokyo` | 新しいユーザーのタイムゾーン |
 | `OFFSAVE_SUSPECT_AFTER_SECS` | `600` | ハートビートがこの秒数途絶えたら、友達に「連絡が途絶えた」と通知する |
+| `OFFSAVE_PROTECTION_GRACE_SECS` | `15` | 保護（Accessibility・デバイス管理者）が外れてから、この秒数のあいだに戻れば、通知しない（アプリの更新で一瞬外れるため） |
 | `OFFSAVE_TAILSCALE_SOCKET` | 自動 | tailscaled の LocalAPI のソケット |
 | `OFFSAVE_AUTO_UPDATE` | なし | `1` で自動更新（上の「更新の仕組み」）。systemd の `Restart=on-failure` が、入れ替えたあとの再起動をする |
 
@@ -110,7 +111,7 @@ PayPay など一部のアプリは、Accessibility が有効なデバイスで�
 - 画面オフ・30 分経過・アプリの再起動のどれでも、保護を戻します。
 - 使う側のデバイスに、権限を 2 つ用意します（足りないと、「このデバイスの保護」に出ます）。
   1. 「使用状況へのアクセス」を許可する（画面から）。
-  2. 設定の書き込みの権限を、PC と USB で 1 回付ける（アンインストールするまで有効。Shizuku のアプリからも付けられます）:
+  2. 設定の書き込みの権限を 1 回付ける（アンインストールするまで有効）。「このデバイスの保護」に手順とコピーできるコマンドがあり、Shizuku が動いていればボタン 1 つで付けられます。PC で付ける場合:
      ```
      adb shell pm grant dev.offsave.app android.permission.WRITE_SECURE_SETTINGS
      ```

@@ -140,6 +140,8 @@ export interface NativeStatus {
   paused: boolean;
   /** 設定の書き込みの権限（adb で 1 回付ける） */
   canWriteSecure: boolean;
+  /** Shizuku が動いている（これで権限を付けられる） */
+  shizuku: boolean;
   /** 使用状況へのアクセス */
   usageAccess: boolean;
   /** 友達が決めた、Accessibility を拒むアプリの数 */

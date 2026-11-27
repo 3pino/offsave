@@ -278,6 +278,17 @@ class Tracker(private val store: StateStore) {
     return Decision(verdict, newGraces, ds.mapNotNull { it.nextWakeup }.minOrNull())
   }
 
+  /** 猶予のキー（`ルール ID|制限の番号@…`）が、どの種類の制限か。わからなければ null。 */
+  fun limitKindOf(graceKey: String): BlockKind? {
+    val ruleId = graceKey.substringBefore('|')
+    val index = graceKey.substringAfter('|').substringBefore('@').toIntOrNull() ?: return null
+    return when (policy?.rules?.firstOrNull { it.id == ruleId }?.limits?.getOrNull(index)) {
+      is Limit.DailyTotal -> BlockKind.DAILY_TOTAL
+      is Limit.Window -> BlockKind.WINDOW
+      null -> null
+    }
+  }
+
   /** ルール名（オーバーレイの表示用）。 */
   fun ruleName(id: String): String? = policy?.rules?.firstOrNull { it.id == id }?.name
 }

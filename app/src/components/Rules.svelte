@@ -120,8 +120,9 @@
   <div class="card">
     <div class="card-title">
       <span class="grow">{rule.name}{rule.enabled ? '' : '（無効）'}</span>
+      <!-- 自分のルールも、緩めない変更（厳しくするだけ）はできる。削除は友達だけ -->
+      <IconButton label="編集" icon={Pencil} onclick={() => openEditor(person, rule)} />
       {#if !person.mine}
-        <IconButton label="編集" icon={Pencil} onclick={() => openEditor(person, rule)} />
         <IconButton label="削除" icon={Trash2} onclick={() => remove(rule)} />
       {/if}
     </div>
