@@ -186,6 +186,9 @@ class Link(private val agent: Agent) {
     for (r in pendingReports.toList()) ws.send(r.toString())
     pendingReports.clear()
 
+    // off にされた設定があれば知らせる（プロセスが再起動したときもここで気づく。送るのはこの直後）
+    agent.watch.check()
+
     val flags = agent.flags()
     ws.send(
       JSONObject().put("type", "heartbeat")

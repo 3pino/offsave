@@ -11,6 +11,8 @@ const COMMANDS: &[&str] = &[
     "request_battery_exemption",
     "request_notifications",
     "open_app_details",
+    "open_android_setting",
+    "take_settings_request",
     "installed_apps",
     "app_icon",
 ];

@@ -31,6 +31,11 @@ class ConfigureArgs {
 }
 
 @InvokeArg
+class AndroidSettingArgs {
+  lateinit var kind: String
+}
+
+@InvokeArg
 class AppIconArgs {
   lateinit var pkg: String
 }
@@ -176,6 +181,24 @@ class EnforcerPlugin(private val activity: Activity) : Plugin(activity) {
       .putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
     activity.startActivity(intent)
     invoke.resolve()
+  }
+
+  /**
+   * このアプリの Android の設定の、項目に直接飛ぶ（「アプリ情報」は経由しない）。
+   * 設定画面の見張りは止めない（ここの画面には無効化のボタンが無い）。開けたかを `opened` で返す。
+   */
+  @Command
+  fun openAndroidSetting(invoke: Invoke) {
+    val args = invoke.parseArgs(AndroidSettingArgs::class.java)
+    invoke.resolve(JSObject().put("opened", AndroidSettings.open(activity, args.kind)))
+  }
+
+  /** 「アプリ情報」を開いたときに、「Android の設定」へ案内したか。読むと、もう一度返すことはない。 */
+  @Command
+  fun takeSettingsRequest(invoke: Invoke) {
+    val requested = agent.settingsRequested
+    agent.settingsRequested = false
+    invoke.resolve(JSObject().put("requested", requested))
   }
 
   /** アプリ情報（Android 13 以降で「制限された設定」を許可するのに使う）。 */

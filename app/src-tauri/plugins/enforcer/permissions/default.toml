@@ -14,6 +14,8 @@ permissions = [
   "allow-request-battery-exemption",
   "allow-request-notifications",
   "allow-open-app-details",
+  "allow-open-android-setting",
+  "allow-take-settings-request",
   "allow-installed-apps",
   "allow-app-icon",
 ]

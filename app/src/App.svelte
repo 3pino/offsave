@@ -22,6 +22,7 @@
   import Setup from './components/Setup.svelte';
   import { events } from './lib/events.svelte';
   import { names } from './lib/names.svelte';
+  import { native } from './lib/native';
   import { protection } from './lib/protection.svelte';
   import { session } from './lib/session.svelte';
   import { ui, type Tab } from './lib/ui.svelte';
@@ -90,6 +91,18 @@
       untrack(() => nav.sync());
     });
     return () => nav.stop();
+  });
+
+  // 「アプリ情報」を開いたときは、友達には知らせず、アプリ内の「Android の設定」に案内される（無効化・アンインストールのボタンがある画面だけを避けて、項目へ直接飛べる）
+  $effect(() => {
+    if (!isAndroid() || !session.saved) return;
+    const check = () => {
+      if (document.visibilityState !== 'visible') return;
+      void native.takeSettingsRequest().then((requested) => requested && ui.openSettings('android')).catch(() => {});
+    };
+    check();
+    document.addEventListener('visibilitychange', check);
+    return () => document.removeEventListener('visibilitychange', check);
   });
 
   // 通知（友達のイベント）は、画面を開いていなくても取り直す（ナビゲーションの点のため）

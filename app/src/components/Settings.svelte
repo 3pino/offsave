@@ -6,6 +6,7 @@
   import Eye from '@lucide/svelte/icons/eye';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Smartphone from '@lucide/svelte/icons/smartphone';
+  import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
   import Button from '@3pino/ui-kit-web/Button.svelte';
   import Section from '@3pino/ui-kit-web/Section.svelte';
   import SettingRow from '@3pino/ui-kit-web/SettingRow.svelte';
@@ -20,6 +21,7 @@
   import { ui } from '../lib/ui.svelte';
   import { updater } from '../lib/updater.svelte';
   import type { UserSettings } from '../lib/types';
+  import AndroidSettings from './AndroidSettings.svelte';
   import Page from './Page.svelte';
   import ProtectionPanel from './ProtectionPanel.svelte';
   import SettingsDevices from './SettingsDevices.svelte';
@@ -100,6 +102,8 @@
   <Page title="このデバイスの保護" onback={closeSub}>
     <ProtectionPanel />
   </Page>
+{:else if ui.settingsSub === 'android'}
+  <AndroidSettings onback={closeSub} />
 {:else if ui.settingsSub === 'devices'}
   <SettingsDevices onback={closeSub} onunlink={unlink} />
 {:else if ui.settingsSub === 'hidden'}
@@ -118,6 +122,7 @@
           {#if protection.incomplete}<span class="pill pill-bad">要対応</span>{/if}
         {/snippet}
       </SettingRow>
+      <SettingRow name="Android の設定" description="通知・権限・データ・電池など（アプリ情報の代わり）" icon={SlidersHorizontal} onclick={() => (ui.settingsSub = 'android')} />
     {/if}
     <SettingRow name="デバイス" icon={Smartphone} onclick={() => (ui.settingsSub = 'devices')} />
     <SettingRow name="非表示のアプリ" icon={Eye} onclick={() => (ui.settingsSub = 'hidden')} />

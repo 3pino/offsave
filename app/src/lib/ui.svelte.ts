@@ -2,7 +2,7 @@ import { Shell } from '@3pino/app-kit-web/shell';
 
 export type Tab = 'home' | 'rules' | 'friends' | 'events' | 'settings';
 /** 設定の中のサブ画面 */
-export type SettingsSub = 'protection' | 'devices' | 'hidden';
+export type SettingsSub = 'protection' | 'android' | 'devices' | 'hidden';
 
 /** 幅の境目（@3pino/design-system の決まり。767px 以下がモバイル） */
 const MOBILE_QUERY = '(max-width: 767px)';

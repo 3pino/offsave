@@ -36,6 +36,7 @@ class Agent private constructor(context: Context) {
   val tracker = Tracker(stateStore)
   val link = Link(this)
   val pause = Pause(this)
+  val watch = SettingsWatch(this)
   val appVersion = "0.1.0"
 
   private val main = Handler(Looper.getMainLooper())
@@ -134,7 +135,32 @@ class Agent private constructor(context: Context) {
     tracker.onForeground(pkg?.let { "android:$it" }, now())
     guard?.watchBrowser(pkg?.takeIf { Browsers.supported(it) })
     if (pkg != null) checkUnsupportedBrowser(pkg)
+    // 設定を触ってアプリに戻ってきたとき、off にされたものがあれば友達に知らせる
+    if (pkg == context.packageName) main.postDelayed({ watch.check() }, 1_000L)
     reevaluate()
+  }
+
+  // ---- アプリ情報の画面 ----
+
+  /** アプリ内の「Android の設定」を開くよう、画面から読まれる。 */
+  @Volatile var settingsRequested = false
+  private var lastRedirectAt = 0L
+
+  /**
+   * 「アプリ情報」の画面（無効化・アンインストール・強制停止のボタンがある）が開かれた。
+   * 友達には知らせず、ホームを経て、アプリ内の「Android の設定」（ボタンの無い、項目へ直接飛ぶリンク）に案内する。
+   */
+  fun redirectToAndroidSettings() {
+    val t = SystemClock.elapsedRealtime()
+    if (t - lastRedirectAt < 2_000L) return
+    lastRedirectAt = t
+    settingsRequested = true
+    guard?.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
+    main.postDelayed({
+      val intent = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return@postDelayed
+      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+      runCatching { context.startActivity(intent) }
+    }, 300L)
   }
 
   /** ブラウザで見ているサイトが変わった（ホスト名だけ）。 */

@@ -11,11 +11,11 @@ import android.view.accessibility.AccessibilityNodeInfo
  * 前面のアプリを見張る Accessibility Service。
  *
  * - 窓が切り替わるたびに前面のアプリを記録する（ポーリングしない。電池のため）。
- * - 設定画面で offsave の無効化・アンインストールの画面を開いたら、友達に知らせてホームに戻す。
+ * - 設定画面で offsave の「アプリ情報」（無効化・アンインストール・強制停止のボタンがある画面）を開いたら、
+ *   友達には知らせず、アプリ内の「Android の設定」に案内する。
  * - 制限の表示（オーバーレイ）は、この Service の窓として出す。
  */
 class GuardService : AccessibilityService() {
-  private var lastTamperAt = 0L
   private val main = Handler(Looper.getMainLooper())
   private var watchedBrowser: String? = null
 
@@ -74,7 +74,7 @@ class GuardService : AccessibilityService() {
     val pkg = event.packageName?.toString() ?: return
     val agent = Agent.get(this)
 
-    if (pkg in SETTINGS_PACKAGES) checkTamper(agent)
+    if (pkg in SETTINGS_PACKAGES) checkAppInfo(agent)
 
     if (agent.countsAsForeground(pkg)) agent.onForeground(pkg)
   }
@@ -94,20 +94,15 @@ class GuardService : AccessibilityService() {
 
   // ---- 設定画面の見張り ----
 
-  private fun checkTamper(agent: Agent) {
+  private fun checkAppInfo(agent: Agent) {
     if (!agent.prefs.guardSettings) return
     val now = System.currentTimeMillis()
     if (now < agent.prefs.setupUntil) return // 権限の設定の案内の最中
     val root = rootInActiveWindow ?: return
     val texts = ArrayList<String>()
     collectTexts(root, texts, 400)
-    if (!looksLikeOurDangerousPage(texts, packageName.let { agent.appLabel(it) })) return
-
-    if (now - lastTamperAt > 30_000) {
-      lastTamperAt = now
-      agent.link.report("tamper_attempt", "設定画面で offsave の無効化・アンインストールの画面を開きました")
-    }
-    performGlobalAction(GLOBAL_ACTION_HOME)
+    if (!looksLikeOurAppInfo(texts, agent.appLabel(packageName))) return
+    agent.redirectToAndroidSettings()
   }
 
   private fun collectTexts(node: AccessibilityNodeInfo, out: MutableList<String>, limit: Int) {
@@ -132,17 +127,23 @@ class GuardService : AccessibilityService() {
       "com.samsung.android.settings",
     )
 
-    private val DANGEROUS = listOf(
-      "アンインストール", "uninstall", "強制停止", "force stop",
-      "無効にする", "無効化", "deactivate", "disable", "停止",
+    /**
+     * アプリ情報のボタンの文言。「一致」で見る（含むで見ると、通知チャンネル名「保護の一時停止・再開」など、
+     * このアプリの他の設定画面を間違えて拾う）。
+     */
+    private val DANGEROUS = setOf(
+      "アンインストール", "アプリをアンインストール", "uninstall",
+      "強制停止", "アプリを強制停止", "force stop",
+      "無効にする", "アプリを無効にする", "無効化", "disable", "deactivate",
+      "停止",
     )
 
-    /** アプリ名（offsave）を含み、無効化・アンインストールの言葉もある画面か。 */
-    fun looksLikeOurDangerousPage(texts: List<String>, appLabel: String): Boolean {
-      val lower = texts.map { it.lowercase() }
+    /** アプリ名（offsave）を含み、無効化・アンインストール・強制停止のボタンもある「アプリ情報」か。 */
+    fun looksLikeOurAppInfo(texts: List<String>, appLabel: String): Boolean {
+      val lower = texts.map { it.trim().lowercase() }
       val name = appLabel.lowercase()
       val mentionsUs = lower.any { it.contains("offsave") || it.contains(name) }
-      return mentionsUs && lower.any { t -> DANGEROUS.any { t.contains(it) } }
+      return mentionsUs && lower.any { it in DANGEROUS }
     }
   }
 }

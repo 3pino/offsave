@@ -37,6 +37,11 @@ class Prefs(context: Context) {
     get() = sp.getLong("setup_until", 0)
     set(v) = sp.edit().putLong("setup_until", v).apply()
 
+  /** 見張っている Android の設定の、前回の状態（JSON）。`SettingsWatch` が使う。 */
+  var watchedState: String?
+    get() = sp.getString("watched_state", null)
+    set(v) = sp.edit().putString("watched_state", v).apply()
+
   /** 一時停止中（Accessibility を自分で外している）の決済アプリのパッケージ名。していなければ null。 */
   var pausePackage: String?
     get() = sp.getString("pause_package", null)
