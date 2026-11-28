@@ -303,12 +303,24 @@ fn write_executable(_path: &Path, _bytes: &[u8]) -> std::io::Result<()> {
 
 /// 新しいバイナリを `--version` で起動して、想定の版の文字列を返すか確かめる。
 async fn check_version(path: &Path, version: &str) -> Result<(), String> {
-    let mut cmd = tokio::process::Command::new(path);
-    cmd.arg("--version").kill_on_drop(true);
-    let out = tokio::time::timeout(VERSION_CHECK_TIMEOUT, cmd.output())
-        .await
-        .map_err(|_| "--version が時間内に返りません".to_owned())?
-        .map_err(|e| format!("--version を実行できません: {e}"))?;
+    // 書いた直後に起動すると、ほかのスレッドの fork が書き込み用のファイル記述子を持ったままになり、
+    // 「Text file busy」（ETXTBSY）で起動できないことがある。短く待ってやり直す
+    let mut attempt = 0;
+    let out = loop {
+        attempt += 1;
+        let mut cmd = tokio::process::Command::new(path);
+        cmd.arg("--version").kill_on_drop(true);
+        match tokio::time::timeout(VERSION_CHECK_TIMEOUT, cmd.output())
+            .await
+            .map_err(|_| "--version が時間内に返りません".to_owned())?
+        {
+            Ok(out) => break out,
+            Err(e) if e.raw_os_error() == Some(26) && attempt < 5 => {
+                tokio::time::sleep(std::time::Duration::from_millis(100 * attempt)).await;
+            }
+            Err(e) => return Err(format!("--version を実行できません: {e}")),
+        }
+    };
     let got = String::from_utf8_lossy(&out.stdout).trim().to_owned();
     if !out.status.success() || got != version_line(version) {
         return Err(format!("--version が想定と違います（{got:?}）"));
