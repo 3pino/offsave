@@ -7,6 +7,7 @@
   import Menu from '@3pino/ui-kit-web/Menu.svelte';
   import MenuItem from '@3pino/ui-kit-web/MenuItem.svelte';
   import { errorText } from '../lib/errors';
+  import { hidden } from '../lib/hidden.svelte';
   import { protection } from '../lib/protection.svelte';
   import { session } from '../lib/session.svelte';
   import { ui } from '../lib/ui.svelte';
@@ -48,7 +49,10 @@
     const refresh = async () => {
       try {
         const s = await api.status(id);
-        if (alive) status = s;
+        if (alive) {
+          hidden.sync(id, s.hidden);
+          status = s;
+        }
       } catch (e) {
         if (alive) ui.toast(errorText(e), 'error');
       }
@@ -61,7 +65,11 @@
     };
   });
 
-  onMount(() => void loadFriends());
+  onMount(() => {
+    void loadFriends();
+    // 以前はこのデバイスだけに持っていた非表示の一覧を、自分の一覧に和集合で引き取る
+    void hidden.migrateLegacy(api, saved.userId);
+  });
 
   const ns = $derived(protection.ns);
 

@@ -13,7 +13,7 @@ use offsave_core::time::{HOUR_MS, logical_day, logical_day_of};
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::store::users::UserRow;
-use crate::store::{devices, events, friends, pause_apps, rules, usage, users};
+use crate::store::{devices, events, friends, hidden, pause_apps, rules, usage, users};
 use crate::timeutil::clock_for;
 
 /// 自分か、承認済みの友達か。
@@ -220,5 +220,6 @@ pub async fn user_status(state: &AppState, user: &UserRow, now: Ms) -> AppResult
         usage_today,
         labels: usage::labels_of_user(&state.pool, &user.id).await?,
         pause_apps: pause_apps::list(&state.pool, &user.id).await?,
+        hidden: hidden::list(&state.pool, &user.id).await?,
     })
 }

@@ -58,9 +58,8 @@
   );
 
   function setHidden(k: string, hide: boolean) {
-    if (hide) hidden.add(k);
-    else hidden.remove(k);
-    // このデバイスの表示だけの設定なので、自分の画面にだけ知らせる（友達には通知しない）
+    void hidden.change(api, userId, hide ? [k] : [], hide ? [] : [k]);
+    // 表示だけの設定なので、この画面にだけ知らせる（友達には通知しない）
     ui.toast(hide ? `「${names.label(k)}」を非表示にしました` : `「${names.label(k)}」を再表示しました`);
   }
 

@@ -17,11 +17,13 @@ use crate::service::{self, can_view, clock_of, emit, recipients};
 use crate::state::SharedState;
 use crate::store::friends::RequestResult;
 use crate::store::users::UserRow;
-use crate::store::{devices, events, friends, pause_apps, rules, users};
+use crate::store::{devices, events, friends, hidden, pause_apps, rules, users};
 use crate::timeutil::valid_timezone;
 
 /// Accessibility を拒むアプリの上限数
 const MAX_PAUSE_APPS: usize = 20;
+/// 非表示にするアプリ・サイトの上限数
+const MAX_HIDDEN: usize = 500;
 
 pub fn router() -> Router<SharedState> {
     Router::new()
@@ -38,6 +40,7 @@ pub fn router() -> Router<SharedState> {
         .route("/users/{id}/rules", post(create_rule))
         .route("/users/{id}/overrides", post(create_override))
         .route("/users/{id}/pause-apps", put(set_pause_apps))
+        .route("/users/{id}/hidden", post(change_hidden))
         .route("/rules/{id}", put(update_rule).delete(delete_rule))
         .route("/overrides/{id}", delete(delete_override))
         .route("/events", get(list_events))
@@ -609,6 +612,38 @@ async fn set_pause_apps(
         ),
     )
     .await?;
+    Ok(Json(keys))
+}
+
+#[derive(Deserialize)]
+struct HiddenInput {
+    #[serde(default)]
+    add: Vec<String>,
+    #[serde(default)]
+    remove: Vec<String>,
+}
+
+/// 「今日の利用」で初めは隠すもの。`add` は足し（すでにあるものはそのまま = 和集合）、`remove` は外す。
+/// 表示だけの設定（記録・制限には関係しない）で、隠したものは友達も「非表示アプリを表示」で見られる。
+/// 本人も友達も変えられる。友達には通知しない。
+async fn change_hidden(
+    State(state): State<SharedState>,
+    CurrentUser(me): CurrentUser,
+    Path(owner_id): Path<String>,
+    Json(body): Json<HiddenInput>,
+) -> AppResult<Json<Vec<String>>> {
+    require_access(&state, &me, &owner_id, false).await?;
+    let owner = target_user(&state, &owner_id).await?;
+    if body.add.iter().chain(&body.remove).any(|k| !valid_key(k)) {
+        return Err(AppError::bad_request("識別子が正しくありません"));
+    }
+    hidden::change(&state.pool, &owner.id, &me.id, &body.add, &body.remove).await?;
+    let keys = hidden::list(&state.pool, &owner.id).await?;
+    if keys.len() > MAX_HIDDEN {
+        // 上限を超えた分は受け付けない（元に戻す）
+        hidden::change(&state.pool, &owner.id, &me.id, &[], &body.add).await?;
+        return Err(AppError::bad_request(format!("{MAX_HIDDEN} 件までです")));
+    }
     Ok(Json(keys))
 }
 

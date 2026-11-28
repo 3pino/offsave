@@ -83,6 +83,9 @@ export class Api {
   /** Accessibility を拒むアプリ（決済アプリなど）の一覧を置き換える。友達だけができる */
   setPauseApps = (userId: string, keys: string[]) =>
     this.req<string[]>('PUT', `/users/${userId}/pause-apps`, { keys });
+  /** 「今日の利用」で初めは隠すものを、足す（すでにあるものはそのまま）・外す。本人も友達も変えられる。変えたあとの一覧を返す */
+  changeHidden = (userId: string, add: string[], remove: string[]) =>
+    this.req<string[]>('POST', `/users/${userId}/hidden`, { add, remove });
   deleteOverride = (id: string) => this.req<{ ok: boolean }>('DELETE', `/overrides/${id}`);
 
   events = (limit = 50) => this.req<OffsaveEvent[]>('GET', `/events?limit=${limit}`);

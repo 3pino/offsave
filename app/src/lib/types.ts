@@ -120,6 +120,8 @@ export interface UserStatus {
   labels: KeyLabel[];
   /** Accessibility を拒むアプリ（決済アプリなど）。前面にある間だけ、デバイスは Accessibility を外す。友達だけが決められる */
   pause_apps: string[];
+  /** 「今日の利用」で初めは隠すアプリ・サイト。本人と友達が同じ一覧を見る（古いサーバーでは無い） */
+  hidden?: string[];
 }
 
 export type FriendState = 'pending_in' | 'pending_out' | 'accepted';

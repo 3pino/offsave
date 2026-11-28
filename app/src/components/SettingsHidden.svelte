@@ -11,7 +11,7 @@
   import Page from './Page.svelte';
   import TargetPicker from './TargetPicker.svelte';
 
-  // 「今日の利用」に出さないアプリ・サイト（表示だけの設定。記録や制限には関係しない）
+  // 「今日の利用」で初めは隠すアプリ・サイト（表示だけの設定。記録や制限には関係しない。友達も同じ一覧を見る）
   let { onback }: { onback: () => void } = $props();
 
   const saved = $derived(session.saved!);
@@ -20,9 +20,17 @@
   let picking = $state(false);
   let status = $state.raw<UserStatus | null>(null);
 
+  // 一覧は、自分のものをサーバーから取って出す（友達も同じ一覧を見る）
   onMount(() => {
-    void api.status(saved.userId).then((s) => (status = s)).catch(() => {});
+    void api
+      .status(saved.userId)
+      .then((s) => {
+        hidden.sync(saved.userId, s.hidden);
+        status = s;
+      })
+      .catch(() => {});
   });
+  const change = (add: string[], remove: string[]) => void hidden.change(api, saved.userId, add, remove);
 
   // 選べるもの: このデバイスのアプリ + 自分が使ったことのあるもの
   const candidates = $derived.by(() => {
@@ -36,11 +44,11 @@
 
 <Page title="非表示のアプリ" {onback}>
   <section class="hidden-block">
-    {#each hidden.keys as key (key)}
+    {#each status ? hidden.keys : [] as key (key)}
       <div class="row hidden-row">
         <KeyIcon {key} size={28} />
         <div class="grow hidden-name">{names.label(key)}</div>
-        <button type="button" class="hidden-x" aria-label="{names.label(key)} を出すようにする" onclick={() => hidden.remove(key)}><X size={16} /></button>
+        <button type="button" class="hidden-x" aria-label="{names.label(key)} を出すようにする" onclick={() => change([], [key])}><X size={16} /></button>
       </div>
     {:else}
       <p class="empty">まだありません。</p>
@@ -56,8 +64,8 @@
     title="非表示にするアプリ"
     {candidates}
     picked={hidden.has}
-    onpick={(key) => hidden.add(key)}
-    onunpick={(key) => hidden.remove(key)}
+    onpick={(key) => change([key], [])}
+    onunpick={(key) => change([], [key])}
     onclose={() => (picking = false)}
   />
 {/if}

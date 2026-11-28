@@ -942,6 +942,32 @@ async fn rule_usage_in_the_history_counts_overlapping_time_once() {
 }
 
 #[tokio::test]
+async fn hidden_list_is_shared_by_the_user_and_friends_and_adds_are_a_union() {
+    let s = DevServer::start().await;
+    let (alice, bob) = (Client::new(&s, "alice@t"), Client::new(&s, "bob@t"));
+    let stranger = Client::new(&s, "mallory@t");
+    let (a_id, _) = make_friends(&alice, &bob).await;
+    let path = format!("/users/{a_id}/hidden");
+
+    assert!(alice.status(&a_id).await.hidden.is_empty());
+    // 本人が足す。同じものをもう一度足しても、重複しない（デバイスごとの古い一覧を和集合で引き取る）
+    assert_eq!(alice.post(&path, json!({ "add": ["android:a", "android:b"] })).await.0, 200);
+    let (code, v) = alice.post(&path, json!({ "add": ["android:b", "domain:c.com"] })).await;
+    assert_eq!(code, 200, "{v}");
+    assert_eq!(v, json!(["android:a", "android:b", "domain:c.com"]));
+    // 友達も同じ一覧を見て、変えられる
+    assert_eq!(bob.status(&a_id).await.hidden.len(), 3);
+    let (code, v) = bob.post(&path, json!({ "remove": ["android:a"] })).await;
+    assert_eq!(code, 200, "{v}");
+    assert_eq!(alice.status(&a_id).await.hidden, vec!["android:b", "domain:c.com"]);
+    // 友達でない人は変えられない。変な識別子も弾く
+    assert_eq!(stranger.post(&path, json!({ "add": ["android:x"] })).await.0, 403);
+    assert_eq!(alice.post(&path, json!({ "add": [""] })).await.0, 400);
+    // 友達には通知しない（表示だけの設定）
+    assert!(bob.get("/events?limit=50").await.1.as_array().unwrap().iter().all(|e| e["kind"] != "rule_changed"));
+}
+
+#[tokio::test]
 async fn device_token_must_match_user() {
     let s = DevServer::start().await;
     let alice = Client::new(&s, "alice@t");

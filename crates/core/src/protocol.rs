@@ -132,6 +132,9 @@ pub struct UserStatus {
     /// Accessibility を拒むアプリ（決済アプリなど）。これが前面にある間だけ、デバイスは Accessibility を外す。友達だけが決められる。
     #[serde(default)]
     pub pause_apps: Vec<String>,
+    /// 「今日の利用」で初めは隠すアプリ・サイト。本人と友達が同じ一覧を見る（表示だけの設定）。
+    #[serde(default)]
+    pub hidden: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
