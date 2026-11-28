@@ -57,6 +57,8 @@ object Notices {
     ),
   )
   private const val CHANNEL_OTHER = "other"
+  private const val CHANNEL_GRACE = "grace"
+  private const val GRACE_ID = 2
   private const val GROUP_EVENTS = "events"
 
   /** イベントの種類に対応するチャンネルの ID。 */
@@ -67,6 +69,12 @@ object Notices {
     nm.createNotificationChannel(
       NotificationChannel(CHANNEL_SERVICE, "動作中の表示", NotificationManager.IMPORTANCE_MIN).apply {
         description = "offsave が動いていることを示します（消さないでください）"
+        setShowBadge(false)
+      },
+    )
+    nm.createNotificationChannel(
+      NotificationChannel(CHANNEL_GRACE, "制限までの残り時間", NotificationManager.IMPORTANCE_HIGH).apply {
+        description = "制限に達してから使えなくなるまでの 60 秒を、通知で知らせます（画面は占有しません）"
         setShowBadge(false)
       },
     )
@@ -124,6 +132,33 @@ object Notices {
     "clock_skew" -> "時計がずれています"
     "protection_paused" -> "保護を一時停止・再開しました"
     else -> kind
+  }
+
+  /** 猶予の残り時間。通知だけで示す（画面の一部を占有しない）。`remainingMs` 後に自動で消える。 */
+  fun graceCountdown(context: Context, text: String, remainingMs: Long) {
+    if (android.os.Build.VERSION.SDK_INT >= 33 &&
+      context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    ) return
+    ensureChannels(context)
+    val n = NotificationCompat.Builder(context, CHANNEL_GRACE)
+      .setSmallIcon(context.applicationInfo.icon)
+      .setContentTitle("制限に達しました")
+      .setContentText(text)
+      .setWhen(System.currentTimeMillis() + remainingMs)
+      .setShowWhen(true)
+      .setUsesChronometer(true)
+      .setChronometerCountDown(true)
+      .setTimeoutAfter(remainingMs)
+      .setOnlyAlertOnce(true)
+      .setCategory(NotificationCompat.CATEGORY_STATUS)
+      .setPriority(NotificationCompat.PRIORITY_HIGH)
+      .setContentIntent(openApp(context))
+      .build()
+    NotificationManagerCompat.from(context).notify(GRACE_ID, n)
+  }
+
+  fun cancelGraceCountdown(context: Context) {
+    NotificationManagerCompat.from(context).cancel(GRACE_ID)
   }
 
   fun friendEvent(context: Context, event: JSONObject) {

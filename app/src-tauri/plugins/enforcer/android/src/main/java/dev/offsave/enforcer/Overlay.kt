@@ -32,10 +32,10 @@ import android.widget.TextView
 class Overlay(private val service: AccessibilityService, private val agent: Agent) {
   private val wm = service.getSystemService(Context.WINDOW_SERVICE) as WindowManager
   private val main = Handler(Looper.getMainLooper())
-  private var banner: TextView? = null
+  private var notice: NoticeView? = null
   private var block: BlockView? = null
 
-  val visible: Boolean get() = block != null || banner != null
+  val visible: Boolean get() = block != null || notice != null
 
   private var lastChangeAt = 0L
 
@@ -45,12 +45,10 @@ class Overlay(private val service: AccessibilityService, private val agent: Agen
   fun apply(verdict: Verdict, ruleName: String?) {
     when (verdict) {
       is Verdict.Allow -> hideAll()
-      is Verdict.Grace -> {
-        hideBlock()
-        showBanner(verdict.until, ruleName ?: "制限")
-      }
+      // 猶予の間は、画面に何も出さない（残り時間は通知だけ。ブラウザのタブを閉じるのを防げないため）
+      is Verdict.Grace -> hideAll()
       is Verdict.Block -> {
-        hideBanner()
+        hideNotice()
         val name = ruleName ?: "制限"
         showBlock(
           when (verdict.kind) {
@@ -63,65 +61,38 @@ class Overlay(private val service: AccessibilityService, private val agent: Agen
   }
 
   fun hideAll() {
-    hideBanner()
+    hideNotice()
     hideBlock()
   }
 
-  // ---- 猶予の帯 ----
+  // ---- 制限に達したときの全画面（何秒開いていても、猶予は減らない） ----
 
-  private var bannerUntil = 0L
-  private var bannerRule = ""
-  private val bannerTick = object : Runnable {
-    override fun run() {
-      val b = banner ?: return
-      val left = ((bannerUntil - agent.now() + 999) / 1000).coerceAtLeast(0)
-      b.text = "「$bannerRule」の制限に達しました。あと ${left} 秒で使えなくなります"
-      main.postDelayed(this, 1000)
+  /** `title` と `body` を出す。ボタンを押すと `onAccept`（猶予を始める）を呼ぶ。 */
+  fun showNotice(title: String, body: String, onAccept: () -> Unit) {
+    hideBlock()
+    notice?.let {
+      it.set(title, body)
+      return
     }
+    lastChangeAt = SystemClock.elapsedRealtime()
+    val v = NoticeView(service, agent, title, body, onAccept)
+    val lp = WindowManager.LayoutParams(
+      ViewGroup.LayoutParams.MATCH_PARENT,
+      ViewGroup.LayoutParams.MATCH_PARENT,
+      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+      WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+      PixelFormat.TRANSLUCENT,
+    )
+    wm.addView(v, lp)
+    notice = v
   }
 
-  private fun showBanner(until: Long, rule: String) {
-    bannerUntil = until
-    bannerRule = rule
-    if (banner == null) {
-      lastChangeAt = SystemClock.elapsedRealtime()
-      val tv = TextView(service).apply {
-        setTextColor(Color.WHITE)
-        textSize = 15f
-        gravity = Gravity.CENTER
-        setPadding(dp(16), dp(10), dp(16), dp(10))
-        background = GradientDrawable().apply {
-          setColor(0xEED32F2F.toInt())
-          cornerRadius = dp(12).toFloat()
-        }
-      }
-      val lp = WindowManager.LayoutParams(
-        ViewGroup.LayoutParams.MATCH_PARENT,
-        ViewGroup.LayoutParams.WRAP_CONTENT,
-        WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-          WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-        PixelFormat.TRANSLUCENT,
-      ).apply {
-        gravity = Gravity.TOP
-        y = dp(40)
-        x = 0
-      }
-      wm.addView(tv, lp)
-      banner = tv
-    }
-    main.removeCallbacks(bannerTick)
-    bannerTick.run()
-  }
-
-  private fun hideBanner() {
-    main.removeCallbacks(bannerTick)
-    banner?.let {
+  private fun hideNotice() {
+    notice?.let {
       lastChangeAt = SystemClock.elapsedRealtime()
       runCatching { wm.removeView(it) }
     }
-    banner = null
+    notice = null
   }
 
   // ---- ブロックの全画面 ----
@@ -161,6 +132,83 @@ class Overlay(private val service: AccessibilityService, private val agent: Agen
 }
 
 private fun Context.dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+/**
+ * 制限に達したときの全画面。ボタンを押すまで、猶予は始まらない。
+ * 押すと画面を閉じ、以降 60 秒の間は通知だけで知らせる（画面は占有しない）。
+ */
+private class NoticeView(
+  context: Context,
+  private val agent: Agent,
+  title: String,
+  body: String,
+  private val onAccept: () -> Unit,
+) : FrameLayout(context) {
+  private val titleView = TextView(context).apply {
+    setTextColor(Color.WHITE)
+    textSize = 26f
+    gravity = Gravity.CENTER
+    setPadding(0, 0, 0, context.dp(12))
+  }
+  private val bodyView = TextView(context).apply {
+    setTextColor(0xFFDDDDDD.toInt())
+    textSize = 16f
+    gravity = Gravity.CENTER
+    setLineSpacing(0f, 1.2f)
+    setPadding(0, 0, 0, context.dp(28))
+  }
+
+  init {
+    setBackgroundColor(0xFF101418.toInt())
+    isFocusableInTouchMode = true
+    set(title, body)
+    val column = LinearLayout(context).apply {
+      orientation = LinearLayout.VERTICAL
+      gravity = Gravity.CENTER
+      setPadding(context.dp(24), context.dp(24), context.dp(24), context.dp(24))
+      addView(titleView)
+      addView(bodyView)
+      addView(
+        Button(context).apply {
+          text = "+60秒"
+          isAllCaps = false
+          setTextColor(Color.WHITE)
+          textSize = 16f
+          background = GradientDrawable().apply {
+            setColor(0xFF1F6FEB.toInt())
+            cornerRadius = context.dp(12).toFloat()
+          }
+          setOnClickListener { onAccept() }
+        },
+        LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, context.dp(52)),
+      )
+      addView(
+        TextView(context).apply {
+          text = "押すと画面を閉じて、60 秒を数え始めます（残り時間は通知に出ます）。この間に作業を保存したり、ブラウザのタブを閉じたりしてください。"
+          setTextColor(0xFF8B949E.toInt())
+          textSize = 13f
+          gravity = Gravity.CENTER
+          setPadding(0, context.dp(16), 0, 0)
+        },
+      )
+    }
+    addView(column, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+  }
+
+  fun set(title: String, body: String) {
+    titleView.text = title
+    bodyView.text = body
+  }
+
+  /** 戸るキーは、ホームに戻る（この画面の裏のアプリには戻さない）。 */
+  override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+      if (event.action == KeyEvent.ACTION_UP) agent.goHome()
+      return true
+    }
+    return super.dispatchKeyEvent(event)
+  }
+}
 
 /** ブロックの画面。3 つの段階がある: 案内 → 理由の入力 → 確認（10 秒待つ）。 */
 private class BlockView(

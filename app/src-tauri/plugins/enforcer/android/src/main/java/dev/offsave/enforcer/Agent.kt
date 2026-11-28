@@ -185,9 +185,11 @@ class Agent private constructor(context: Context) {
     val now = now()
     val d = tracker.decide(now)
 
-    // 制限に達したとき、どのアプリ・サイトかを友達に伝える。使えない時間帯は、決まった時刻になるだけなので伝えない（合計時間だけ）
+    // 制限に達したとき、どのアプリ・サイトかを友達に伝える。使えない時間帯は、決まった時刻になるだけなので伝えない（合計時間だけ）。
+    // 同じ制限は、本人がボタンを押すまで判定のたびに「新しい」と出るので、一度だけ伝える
     for ((graceKey, _) in d.newGraces) {
       if (tracker.limitKindOf(graceKey) == BlockKind.WINDOW) continue
+      if (!reportedLimits.add(graceKey)) continue
       val ruleId = graceKey.substringBefore('|')
       val name = tracker.ruleName(ruleId) ?: "制限"
       val subject = tracker.graceSubjects[graceKey] ?: tracker.foregroundKey ?: ""
@@ -204,8 +206,35 @@ class Agent private constructor(context: Context) {
       is Verdict.Block -> tracker.ruleName(v.ruleId)
       else -> null
     }
-    overlay?.apply(d.verdict, ruleName)
+    // 新しく制限に達した（猶予をまだ始めていない）ときは、全画面で知らせる。「+60秒」を押すまでは、何秒でも待つ
+    val reached = d.newGraces.firstOrNull()?.first
+    if (reached != null && d.verdict !is Verdict.Block) {
+      val name = tracker.ruleName(reached.substringBefore('|')) ?: "制限"
+      val daily = d.newGraces.any { tracker.limitKindOf(it.first) != BlockKind.WINDOW }
+      Notices.cancelGraceCountdown(context)
+      overlay?.showNotice(
+        if (daily) "1日の制限に達しました" else "使えない時間帯になりました",
+        if (daily) "「$name」の 1 日の上限に達しました。" else "「$name」の使えない時間帯です。",
+      ) { acceptLimit() }
+    } else {
+      overlay?.apply(d.verdict, ruleName)
+      // 猶予の間（60 秒）は、画面は占有せず、残り時間を通知で示す
+      val v = d.verdict
+      if (v is Verdict.Grace) {
+        Notices.graceCountdown(context, "「${ruleName ?: "制限"}」。残り時間が 0 になると使えなくなります", maxOf(1_000L, v.until - now))
+      } else {
+        Notices.cancelGraceCountdown(context)
+      }
+    }
     d.nextWakeup?.let { main.postDelayed(wake, maxOf(500L, it - now + 50)) }
+  }
+
+  private val reportedLimits = HashSet<String>()
+
+  /** 「+60秒」を押した。ここから 60 秒を数え始め、全画面を閉じて通知だけにする。 */
+  private fun acceptLimit() {
+    tracker.startPendingGraces(now())
+    doEvaluate()
   }
 
   fun onPolicy() {

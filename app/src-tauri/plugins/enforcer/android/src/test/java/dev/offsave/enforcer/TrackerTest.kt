@@ -48,7 +48,38 @@ class TrackerTest {
     // 130 秒 → 猶予 → 猶予のあとにブロック
     val d = tr.decide(t0 + 40_000)
     assertTrue(d.verdict is Verdict.Grace)
+    // 猶予は、本人が押すまで始まらない
+    tr.startPendingGraces(t0 + 40_000)
     assertTrue(tr.decide(t0 + 110_000).verdict is Verdict.Block)
+  }
+
+  @Test
+  fun graceDoesNotStartUntilAccepted() {
+    val tr = Tracker(MemoryStore())
+    tr.applyPolicy(policyJson(seconds = 0))
+    tr.onForeground("android:g", t0)
+    // 画面を開いたまま何分でも、ブロックにはならない（いつでも「新しく制限に達した」と出る）
+    for (min in listOf(0L, 1L, 10L, 60L)) {
+      val d = tr.decide(t0 + min * 60_000)
+      assertTrue(d.verdict is Verdict.Grace)
+      assertEquals(1, d.newGraces.size)
+      assertEquals(t0 + min * 60_000 + 60_000, (d.verdict as Verdict.Grace).until)
+    }
+    // 押すと、ここから 60 秒
+    val at = t0 + 60 * 60_000
+    assertEquals(1, tr.startPendingGraces(at).size)
+    val g = tr.decide(at + 30_000)
+    assertTrue(g.verdict is Verdict.Grace)
+    assertTrue(g.newGraces.isEmpty())
+    assertTrue(tr.decide(at + 61_000).verdict is Verdict.Block)
+    // 押す前に別のアプリに行ったときは、何も記録されない
+    val other = Tracker(MemoryStore())
+    other.applyPolicy(policyJson(seconds = 0))
+    other.onForeground("android:g", t0)
+    other.decide(t0)
+    other.onForeground("android:other", t0 + 1_000)
+    assertEquals(Verdict.Allow, other.decide(t0 + 1_000).verdict)
+    assertTrue(other.startPendingGraces(t0 + 1_000).isEmpty())
   }
 
   @Test
@@ -58,6 +89,7 @@ class TrackerTest {
     tr.applyPolicy(policyJson(seconds = 0))
     tr.onForeground("android:g", t0)
     assertTrue(tr.decide(t0).verdict is Verdict.Grace)
+    tr.startPendingGraces(t0)
     // 再起動（猶予の開始が保存されていて、アプリを開き直しても戻らない）
     val tr2 = Tracker(store)
     tr2.onForeground("android:g", t0 + 120_000)

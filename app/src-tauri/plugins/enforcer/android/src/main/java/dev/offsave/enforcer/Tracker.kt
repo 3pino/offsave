@@ -261,11 +261,24 @@ class Tracker(private val store: StateStore) {
     }
     val d = combine(results)
     graceSubjects = subjects
-    if (d.newGraces.isNotEmpty()) {
-      d.newGraces.forEach { graces[it.first] = it.second }
-      persist()
-    }
+    // 新しい猶予は、本人が「60 秒追加して閉じる」を押したときに始める（ここでは記録しない）。先に始めると、画面を開いたままの間に 60 秒が過ぎてしまう
+    pendingGraces = d.newGraces.map { it.first }
     return d
+  }
+
+  /** まだ始めていない猶予のキー（直前の判定で、新しく制限に達したもの）。 */
+  @Volatile var pendingGraces: List<String> = emptyList()
+    private set
+
+  /** 直前の判定で達した制限の猶予を、いま始める。始めたキーを返す。 */
+  @Synchronized
+  fun startPendingGraces(now: Long): List<String> {
+    val keys = pendingGraces
+    if (keys.isEmpty()) return keys
+    keys.forEach { graces[it] = now }
+    pendingGraces = emptyList()
+    persist()
+    return keys
   }
 
   /** Block > Grace（終わりが早い方）> Allow。新しい猺予と次の確認の時刻はまとめる。 */

@@ -157,8 +157,7 @@ class Pause(private val agent: Agent) {
       prefs.pausePackage = null
       return
     }
-    Log.i(TAG, "begin $pkg")
-    agent.link.report("protection_paused", "「${agent.appLabel(pkg)}」を開いている間、保護を一時停止しました")
+    // 一時停止・再開は、友達に通知しない（対象のアプリは友達が決めていて、ハートビートの paused で状態は見える）
     startLoop(pkg, prefs.pauseStartedAt)
   }
 
@@ -206,7 +205,6 @@ class Pause(private val agent: Agent) {
       elapsedMs = now - agent.prefs.pauseStartedAt,
       unknownMs = if (fg == null && unknownSince > 0) now - unknownSince else 0,
     )
-    Log.i(TAG, "tick fg=$fg current=$current step=$step")
     when (step) {
       is PausePlan.Step.End -> end(current, canRestore = canWriteSecure)
       is PausePlan.Step.Keep -> {
@@ -249,7 +247,6 @@ class Pause(private val agent: Agent) {
     main.removeCallbacks(tick)
     val prefs = agent.prefs
     if (prefs.pausePackage == null) return
-    val minutes = (System.currentTimeMillis() - prefs.pauseStartedAt) / 60_000
     if (canRestore) {
       val ok = write { ServiceList.with(it, context.packageName, serviceClass) }
       if (ok) {
@@ -266,11 +263,10 @@ class Pause(private val agent: Agent) {
     }
     if (canRestore) restoringUntil = SystemClock.elapsedRealtime() + 10_000L
     prefs.pausePackage = null
-    agent.link.report(
-      "protection_paused",
-      if (canRestore) "「${agent.appLabel(pkg)}」から離れたので、保護を再開しました（${minutes} 分間）"
-      else "保護を戻せませんでした（設定の書き込みの権限がありません）",
-    )
+    // 戻せなかったとき（権限が無い）だけは、保護が外れたままなので、友達に知らせる
+    if (!canRestore) {
+      agent.link.report("protection_paused", "保護を戻せませんでした（設定の書き込みの権限がありません）")
+    }
     // サービスがつながり直したところで、ハートビートを送る（Agent.attachGuard）
   }
 
