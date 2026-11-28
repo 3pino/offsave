@@ -7,6 +7,18 @@ import type { UpdateBackend } from '@3pino/app-kit-web/updater';
 export const REPO = '3pino/offsave';
 export const RELEASES_URL = `https://github.com/${REPO}/releases/latest`;
 
+/** 「最新のリリース」のページの転送先（タグ）をデバイス側で読み、APK のアドレスを組み立てる（API の回数の上限にかからない） */
+async function latestWithoutApi(): Promise<Awaited<ReturnType<UpdateBackend['fetchLatestAndroid']>>> {
+  const { tag } = await invokeNative<{ tag: string }>('apk-updater', 'latest_tag');
+  const version = tag.replace(/^v/, '');
+  const name = `offsave_${version}_android-arm64.apk`;
+  return {
+    tag_name: tag,
+    body: null,
+    assets: [{ name, browser_download_url: `https://github.com/${REPO}/releases/download/${tag}/${name}` }],
+  };
+}
+
 export function tauriUpdateBackend(): UpdateBackend {
   return {
     kind: () => (isAndroid() ? 'android' : 'desktop'),
@@ -24,11 +36,18 @@ export function tauriUpdateBackend(): UpdateBackend {
       await relaunch();
     },
     async fetchLatestAndroid() {
-      const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
-        headers: { Accept: 'application/vnd.github+json' },
-        cache: 'no-store',
-      });
+      // GitHub の API（未認証は 1 時間に 60 回まで）。同じ IP の他の人が使うと 403 になるので、上限に当たったときは、API を使わない方法に切り替える
+      let res: Response;
+      try {
+        res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+          headers: { Accept: 'application/vnd.github+json' },
+          cache: 'no-store',
+        });
+      } catch {
+        return latestWithoutApi();
+      }
       if (res.status === 404) throw new Error('リリースが見つかりません');
+      if (res.status === 403 || res.status === 429) return latestWithoutApi();
       if (!res.ok) throw new Error(`GitHub に接続できません (HTTP ${res.status})`);
       return (await res.json()) as Awaited<ReturnType<UpdateBackend['fetchLatestAndroid']>>;
     },

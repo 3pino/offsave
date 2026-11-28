@@ -2,4 +2,4 @@
 
 [default]
 description = "APK のダウンロードとインストーラーの起動を許可する"
-permissions = ["allow-can-install", "allow-open-install-settings", "allow-download-and-install"]
+permissions = ["allow-can-install", "allow-open-install-settings", "allow-latest-tag", "allow-download-and-install"]

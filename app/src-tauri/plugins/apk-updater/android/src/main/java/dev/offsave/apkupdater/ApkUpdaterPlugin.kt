@@ -53,6 +53,30 @@ class ApkUpdaterPlugin(private val activity: Activity) : Plugin(activity) {
   }
 
   /**
+   * 最新のリリースのタグを、GitHub の API を使わずに調べる（API は未認証だと 1 時間に 60 回までで、
+   * 同じ IP（携帯回線・VPN など）の他の人が使うと 403 になる）。「最新のリリース」のページの転送先を読む。
+   */
+  @Command
+  fun latestTag(invoke: Invoke) {
+    Thread {
+      val conn = URL(UrlRules.LATEST_URL).openConnection() as HttpURLConnection
+      try {
+        conn.instanceFollowRedirects = false
+        conn.connectTimeout = 15_000
+        conn.readTimeout = 15_000
+        if (conn.responseCode !in 300..399) throw Exception("最新のリリースを確かめられません (HTTP ${conn.responseCode})")
+        val tag = UrlRules.tagFromLocation(conn.getHeaderField("Location"))
+          ?: throw Exception("最新のリリースのタグを読めません")
+        invoke.resolve(JSObject().put("tag", tag))
+      } catch (ex: Exception) {
+        invoke.reject(ex.message ?: ex.toString())
+      } finally {
+        conn.disconnect()
+      }
+    }.start()
+  }
+
+  /**
    * APK をキャッシュにダウンロードし、システムのインストーラーを開く。
    * 入れ替えるときの署名の照合は Android のインストーラーが行う（入っているアプリと同じ鍵の署名でなければ入らない）。
    */
