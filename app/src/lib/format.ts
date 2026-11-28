@@ -41,8 +41,8 @@ export const EVENT_LABEL: Record<EventKind, string> = {
   device_online: '再び接続しました',
   device_added: 'デバイスが追加されました',
   device_removed: 'デバイスが削除されました',
-  protection_disabled: '保護が無効になりました',
-  protection_restored: '保護が有効になりました',
+  protection_disabled: '監視が無効になりました',
+  protection_restored: '監視が有効になりました',
   tamper_attempt: '無効化・アンインストールを試みました',
   limit_reached: '制限に達しました',
   friend_added: '友達になりました',
@@ -51,7 +51,7 @@ export const EVENT_LABEL: Record<EventKind, string> = {
   rule_changed: 'ルールが変わりました',
   unsupported_browser: '対応していないブラウザを使いました',
   clock_skew: '時計がずれています',
-  protection_paused: '保護を一時停止・再開しました',
+  protection_paused: '監視を一時停止・再開しました',
 };
 
 /** 警告として強調するイベント */

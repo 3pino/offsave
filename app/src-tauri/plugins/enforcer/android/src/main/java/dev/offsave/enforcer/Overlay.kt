@@ -200,7 +200,7 @@ private class NoticeView(
     bodyView.text = body
   }
 
-  /** 戸るキーは、ホームに戻る（この画面の裏のアプリには戻さない）。 */
+  /** 戻るキーは、ホームに戻る（この画面の裏のアプリには戻さない）。 */
   override fun dispatchKeyEvent(event: KeyEvent): Boolean {
     if (event.keyCode == KeyEvent.KEYCODE_BACK) {
       if (event.action == KeyEvent.ACTION_UP) agent.goHome()

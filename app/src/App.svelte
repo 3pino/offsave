@@ -121,7 +121,7 @@
     { id: 'rules', label: 'ルール', icon: ListChecks },
     { id: 'friends', label: '友達', icon: Users },
     { id: 'events', label: '通知', icon: Bell, badge: ui.tab === 'events' ? null : events.unseen },
-    { id: 'settings', label: '設定', icon: Settings, alert: protection.incomplete ? '保護が不完全' : showUpdateBadge(updater.state) ? UPDATE_BADGE_LABEL : null },
+    { id: 'settings', label: '設定', icon: Settings, alert: protection.incomplete ? '監視が不完全' : showUpdateBadge(updater.state) ? UPDATE_BADGE_LABEL : null },
   ]);
 </script>
 

@@ -107,7 +107,7 @@ class Agent private constructor(context: Context) {
       overlay?.hideAll()
       overlay = null
     }
-    // 保護が外れたことを、次のハートビートを待たずに伝える（サーバーが状態の変化から友達に通知する）
+    // 監視が外れたことを、次のハートビートを待たずに伝える（サーバーが状態の変化から友達に通知する）
     link.heartbeatNow()
   }
 

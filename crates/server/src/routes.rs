@@ -509,7 +509,7 @@ struct PauseAppsInput {
     keys: Vec<String>,
 }
 
-/// Accessibility を拒むアプリ（決済アプリなど）の一覧を置き換える。保護を弱める操作なので、友達だけができる。
+/// Accessibility を拒むアプリ（決済アプリなど）の一覧を置き換える。監視を弱める操作なので、友達だけができる。
 async fn set_pause_apps(
     State(state): State<SharedState>,
     CurrentUser(me): CurrentUser,
@@ -538,7 +538,7 @@ async fn set_pause_apps(
         &owner,
         &me,
         &format!(
-            "「Accessibility を拒むアプリ」を {} 件にしました（これを開いている間だけ、保護を一時停止します）",
+            "「Accessibility を拒むアプリ」を {} 件にしました（これを開いている間だけ、監視を一時停止します）",
             keys.len()
         ),
     )

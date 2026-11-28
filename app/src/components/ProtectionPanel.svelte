@@ -57,7 +57,7 @@
     }
   }
 
-  // このデバイスの保護（Android）。上から順に有効にしていく
+  // このデバイスの監視（Android）。上から順に有効にしていく
   const ns = $derived(protection.ns);
   const saved = $derived(session.saved!);
 

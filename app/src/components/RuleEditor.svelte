@@ -104,7 +104,7 @@
       <TextInput bind:value={name} placeholder="例: ゲーム" />
     </label>
     {#if selfEdit}
-      <p class="muted small">自分でできるのは、厳しくする変更だけです（名前の変更・対象や制限の追加・曜日の追加・1 日の合計時間の短縮・使えない時間帯の拡大）。緩める変更は友達に頂んでください。</p>
+      <p class="muted small">自分でできるのは、厳しくする変更だけです（名前の変更・対象や制限の追加・曜日の追加・1 日の合計時間の短縮・使えない時間帯の拡大）。緩める変更は友達に頼んでください。</p>
     {/if}
 
     <section class="editor-block">

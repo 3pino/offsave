@@ -17,7 +17,7 @@ pub struct AppState {
     pub tailscale: Tailscale,
     /// 自動更新で入れ替えたあとの、再起動の要求。
     pub restart: Restart,
-    /// 保護が外れたが、まだ友達に知らせていない（猛予中の）デバイス。
+    /// 監視が外れたが、まだ友達に知らせていない（猶予中の）デバイス。
     pub pending_loss: Mutex<HashSet<String>>,
 }
 

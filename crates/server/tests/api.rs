@@ -574,7 +574,7 @@ async fn only_a_friend_sets_the_apps_that_pause_protection_and_pausing_is_not_a_
     let events: Vec<Event> = serde_json::from_value(alice.get("/events").await.1).unwrap();
     assert!(events.iter().any(|e| e.kind == EventKind::RuleChanged && e.message.contains("Accessibility")));
 
-    // 一時停止中（Accessibility を自分で外した）は、保護が外れたとは見なさない
+    // 一時停止中（Accessibility を自分で外した）は、監視が外れたとは見なさない
     phone.heartbeat(DeviceFlags { accessibility: false, paused: true, ..protected() }).await;
     phone.heartbeat(protected()).await;
     tokio::time::sleep(Duration::from_millis(200)).await;
@@ -588,7 +588,7 @@ async fn only_a_friend_sets_the_apps_that_pause_protection_and_pausing_is_not_a_
 
     // デバイスが一時停止と再開を友達に報告できる
     phone
-        .send(&DeviceMsg::Report { kind: EventKind::ProtectionPaused, message: "PayPayのため、保護を一時停止しました".into() })
+        .send(&DeviceMsg::Report { kind: EventKind::ProtectionPaused, message: "PayPayのため、監視を一時停止しました".into() })
         .await;
     tokio::time::sleep(Duration::from_millis(200)).await;
     let events: Vec<Event> = serde_json::from_value(bob.get("/events").await.1).unwrap();
@@ -618,7 +618,7 @@ async fn a_blip_in_protection_is_not_reported_but_a_lasting_loss_is() {
     assert!(!seen.contains(&EventKind::ProtectionDisabled), "{seen:?}");
     assert!(!seen.contains(&EventKind::ProtectionRestored), "{seen:?}");
 
-    // 猛予を超えて外れたままなら、知らせる。戻ったときも知らせる
+    // 猶予を超えて外れたままなら、知らせる。戻ったときも知らせる
     phone.heartbeat(DeviceFlags { accessibility: false, ..protected() }).await;
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert!(!kinds(bob.get("/events").await.1).contains(&EventKind::ProtectionDisabled));

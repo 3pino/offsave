@@ -5,7 +5,7 @@
   import { names } from '../lib/names.svelte';
   import type { DeviceInfo } from '../lib/types';
 
-  // デバイスの一覧（状態・最後の連絡・保護の不足）。onremove を渡すと、削除ボタンを出す
+  // デバイスの一覧（状態・最後の連絡・監視の不足）。onremove を渡すと、削除ボタンを出す
   let {
     devices,
     currentId = '',
@@ -38,10 +38,10 @@
       {#if d.foreground}・ いま {names.label(d.foreground)}{/if}
     </div>
     {#if d.flags.paused}
-      <div class="muted small">決済アプリなどのため、保護を一時停止しています。</div>
+      <div class="muted small">決済アプリなどのため、監視を一時停止しています。</div>
     {:else if d.state !== 'new' && !(d.flags.accessibility && d.flags.device_admin)}
       <div class="error-text small">
-        保護が不完全です:
+        監視が不完全です:
         {#if !d.flags.accessibility}Accessibility が無効 {/if}
         {#if !d.flags.device_admin}デバイス管理者が無効{/if}
       </div>

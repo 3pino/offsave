@@ -34,7 +34,7 @@
 <Page title="{saved.userName} さん" header={false}>
   {#if ns && protection.incomplete}
     <div class="card card-warn">
-      <div>このデバイスの保護が、まだ完全ではありません。</div>
+      <div>このデバイスの監視が、まだ完全ではありません。</div>
       <div><Button variant="primary" onclick={() => ui.openSettings('protection')}>設定を開く</Button></div>
     </div>
   {:else if ns && !ns.connected && ns.lastError}

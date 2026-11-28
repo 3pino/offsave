@@ -6,7 +6,7 @@ import type { NativeStatus } from './types';
 const POLL_MS = 5000;
 
 /**
- * このデバイス（Android）の保護の状態: Accessibility・デバイス管理者・電池の最適化・通知・サーバーとの接続。
+ * このデバイス（Android）の監視の状態: Accessibility・デバイス管理者・電池の最適化・通知・サーバーとの接続。
  * ホームの警告・ナビの点・設定の画面で共有する。Android 以外では、何もしない。
  */
 class Protection {

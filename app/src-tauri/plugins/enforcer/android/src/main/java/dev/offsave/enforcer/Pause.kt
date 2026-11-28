@@ -44,7 +44,7 @@ object ServiceList {
 
 /** 一時停止をいつ終えるかの判定（画面や時計に依存しない部分）。 */
 object PausePlan {
-  /** これを超えたら、アプリがまだ前面でも戻す（保護が戻らないままにならないように）。 */
+  /** これを超えたら、アプリがまだ前面でも戻す（監視が戻らないままにならないように）。 */
   const val MAX_MS = 30 * 60_000L
 
   /** 前面が分からない（アプリの切り替えの途中など）まま、待つ長さ。 */
@@ -112,7 +112,7 @@ class Pause(private val agent: Agent) {
   private var unknownSince = 0L
   private var lastQuery = 0L
 
-  /** 戻した直後、サービスがつながり直すまでの間は、保護が外れたとは見せない。 */
+  /** 戻した直後、サービスがつながり直すまでの間は、監視が外れたとは見せない。 */
   @Volatile private var restoringUntil = 0L
 
   /** 友達に送る「一時停止中」。外している間と、戻した直後のつなぎ直しの間。 */
@@ -242,7 +242,7 @@ class Pause(private val agent: Agent) {
     if (fg != before && fg != null && fg !in IGNORED) agent.onForeground(fg)
   }
 
-  /** 戻す。`canRestore` が false（権限が無い）なら、戻せないので、状態だけ消す（友達には「保護が外れた」として届く）。 */
+  /** 戻す。`canRestore` が false（権限が無い）なら、戻せないので、状態だけ消す（友達には「監視が外れた」として届く）。 */
   private fun end(pkg: String, canRestore: Boolean) {
     main.removeCallbacks(tick)
     val prefs = agent.prefs
@@ -263,9 +263,9 @@ class Pause(private val agent: Agent) {
     }
     if (canRestore) restoringUntil = SystemClock.elapsedRealtime() + 10_000L
     prefs.pausePackage = null
-    // 戻せなかったとき（権限が無い）だけは、保護が外れたままなので、友達に知らせる
+    // 戻せなかったとき（権限が無い）だけは、監視が外れたままなので、友達に知らせる
     if (!canRestore) {
-      agent.link.report("protection_paused", "保護を戻せませんでした（設定の書き込みの権限がありません）")
+      agent.link.report("protection_paused", "監視を戻せませんでした（設定の書き込みの権限がありません）")
     }
     // サービスがつながり直したところで、ハートビートを送る（Agent.attachGuard）
   }

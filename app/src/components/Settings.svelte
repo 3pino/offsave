@@ -99,7 +99,7 @@
 </script>
 
 {#if ui.settingsSub === 'protection'}
-  <Page title="このデバイスの保護" onback={closeSub}>
+  <Page title="このデバイスの監視" onback={closeSub}>
     <ProtectionPanel />
   </Page>
 {:else if ui.settingsSub === 'android'}
@@ -117,21 +117,21 @@
 
   <Section title="このアプリ">
     {#if isAndroid}
-      <SettingRow name="このデバイスの保護" description="Accessibility・デバイス管理者・電池・通知、サーバーとの接続" icon={ShieldCheck} onclick={() => (ui.settingsSub = 'protection')}>
+      <SettingRow name="このデバイスの監視" description="必要な権限" icon={ShieldCheck} onclick={() => (ui.settingsSub = 'protection')}>
         {#snippet control()}
           {#if protection.incomplete}<span class="pill pill-bad">要対応</span>{/if}
         {/snippet}
       </SettingRow>
-      <SettingRow name="Android の設定" description="通知・権限・データ・電池など（アプリ情報の代わり）" icon={SlidersHorizontal} onclick={() => (ui.settingsSub = 'android')} />
+      <SettingRow name="Android の設定" description="通知・データ・電池など" icon={SlidersHorizontal} onclick={() => (ui.settingsSub = 'android')} />
     {/if}
-    <SettingRow name="デバイス" icon={Smartphone} onclick={() => (ui.settingsSub = 'devices')} />
+    <SettingRow name="デバイスの一覧" icon={Smartphone} onclick={() => (ui.settingsSub = 'devices')} />
     <SettingRow name="非表示のアプリ" icon={Eye} onclick={() => (ui.settingsSub = 'hidden')} />
   </Section>
 
   <Section title="日付と時間">
     {#if settings}
       <label class="field">
-        <span class="field-label">1 日の始まり（この時刻から次の同じ時刻までを 1 日として数えます）</span>
+        <span class="field-label">1 日の始まり</span>
         <div class="row">
           <input class="input time" type="time" bind:value={boundary} />
           <Button variant="primary" disabled={busy || !changed} onclick={saveBoundary}>保存</Button>
@@ -182,7 +182,7 @@
   {/if}
 
   <Section title="このデバイス">
-    <SettingRow name={saved.deviceName || 'このデバイス'} description="連携を解除すると、このデバイスは友達から見えなくなり、制限も外れます。" />
+    <SettingRow name={saved.deviceName || 'このデバイス'} description="連携を解除すると、このデバイスは友達から見えなくなり、制限も外れます。友達に通知されます。" />
     <div><Button variant="danger" onclick={unlink}>連携を解除する</Button></div>
   </Section>
 </Page>

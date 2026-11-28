@@ -41,7 +41,7 @@
     return [...map].map(([key, label]) => ({ key, label }));
   }
 
-  // 「保護を一時停止するアプリ」を選んでいるところ（友達だけが決められる）
+  // 「監視を一時停止するアプリ」を選んでいるところ（友達だけが決められる）
   let pausePickingId = $state<string | null>(null);
   // 選んでいる間も 5 秒ごとに取り直すので、id で持ち、最新の状態を引く
   const pausePicking = $derived(people.find((p) => p.user.id === pausePickingId) ?? null);
@@ -120,7 +120,7 @@
   <div class="card">
     <div class="card-title">
       <span class="grow">{rule.name}{rule.enabled ? '' : '（無効）'}</span>
-      <!-- 自分のルールも、緩めない変更（厳しくするだけ）はできる。削除は友達だけ -->
+      <!-- 自分のルールも、緩めない変更はできる。削除は友達だけ -->
       <IconButton label="編集" icon={Pencil} onclick={() => openEditor(person, rule)} />
       {#if !person.mine}
         <IconButton label="削除" icon={Trash2} onclick={() => remove(rule)} />
@@ -156,9 +156,6 @@
       {@const status = person.status}
       <section class="person">
         <h2 class="block-title">{person.mine ? 'あなたのルール' : `${person.user.display_name} さんのルール`}</h2>
-        {#if person.mine}
-          <p class="muted small">あなたのルールは、友達が決めます。自分で足せるのは、制限を厳しくするルールだけです（あとから外すには友達の操作が必要です）。</p>
-        {/if}
 
         {#if status}
           {#each status.rules as rs (rs.rule.id)}
@@ -187,8 +184,8 @@
           {/each}
 
           {#if !person.mine || status.pause_apps.length > 0}
-            <h3 class="block-title">保護を一時停止するアプリ</h3>
-            <p class="muted small">決済アプリなど、Accessibility が有効だと使えないアプリ。開いている間だけ、保護を自動で止めます。</p>
+            <h3 class="block-title">監視を一時停止するアプリ</h3>
+            <p class="muted small">決済アプリなど、Accessibility が有効だと使えないアプリ。開いている間だけ、監視を自動で止めます。</p>
             {#each status.pause_apps as key (key)}
               <div class="row pause-row">
                 <KeyIcon {key} size={28} />
@@ -216,7 +213,7 @@
   {@const target = pausePicking}
   <TargetPicker
     appsOnly
-    title="保護を一時停止するアプリ"
+    title="監視を一時停止するアプリ"
     candidates={pauseCandidates(target)}
     picked={(k) => (pausePicking?.status?.pause_apps ?? []).includes(k)}
     onpick={(k) => setPause(target, [...(pausePicking?.status?.pause_apps ?? []), k])}

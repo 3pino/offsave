@@ -31,12 +31,12 @@ object Notices {
       NotificationManager.IMPORTANCE_DEFAULT, setOf("limit_reached"),
     ),
     EventChannel(
-      "protection", "保護の無効化・不審な操作", "保護が外れた・無効化やアンインストールを試した・時計がずれた・対応外のブラウザを使ったとき",
+      "protection", "監視の無効化・不審な操作", "監視が外れた・無効化やアンインストールを試した・時計がずれた・対応外のブラウザを使ったとき",
       NotificationManager.IMPORTANCE_HIGH,
       setOf("protection_disabled", "tamper_attempt", "clock_skew", "unsupported_browser"),
     ),
     EventChannel(
-      "protection_pause", "保護の一時停止・再開", "決済アプリなどのために保護を一時停止した・再開したとき",
+      "protection_pause", "監視の一時停止・再開", "決済アプリなどのために監視を一時停止した・再開したとき",
       NotificationManager.IMPORTANCE_DEFAULT, setOf("protection_paused", "protection_restored"),
     ),
     EventChannel(
@@ -120,8 +120,8 @@ object Notices {
     "device_online" -> "再び接続しました"
     "device_added" -> "デバイスが追加されました"
     "device_removed" -> "デバイスが削除されました"
-    "protection_disabled" -> "保護が無効になりました"
-    "protection_restored" -> "保護が有効になりました"
+    "protection_disabled" -> "監視が無効になりました"
+    "protection_restored" -> "監視が有効になりました"
     "tamper_attempt" -> "無効化・アンインストールを試みました"
     "limit_reached" -> "制限に達しました"
     "friend_added" -> "友達になりました"
@@ -130,7 +130,7 @@ object Notices {
     "rule_changed" -> "ルールが変わりました"
     "unsupported_browser" -> "対応していないブラウザを使いました"
     "clock_skew" -> "時計がずれています"
-    "protection_paused" -> "保護を一時停止・再開しました"
+    "protection_paused" -> "監視を一時停止・再開しました"
     else -> kind
   }
 

@@ -17,7 +17,7 @@ pub struct Config {
     pub default_timezone: String,
     /// ハートビートがこの時間（ミリ秒）途絶えたら「疑い」にする（`OFFSAVE_SUSPECT_AFTER_SECS`、既定 600 秒）。
     pub suspect_after_ms: i64,
-    /// 保護が外れてから友達に知らせるまでの猛予（ミリ秒、`OFFSAVE_PROTECTION_GRACE_SECS`、既定 15 秒）。
+    /// 監視が外れてから友達に知らせるまでの猶予（ミリ秒、`OFFSAVE_PROTECTION_GRACE_SECS`、既定 15 秒）。
     /// アプリの更新や再起動で、一瞬外れてすぐ戻るときに、知らせないため。
     pub protection_grace_ms: u64,
     /// 一時解除の長さ（分）。

@@ -16,7 +16,7 @@ class SettingsGuardTest {
   @Test
   fun otherPagesOfOurAppAreNotRedirected() {
     // 通知の設定: 通知チャンネルの名前に「停止」を含むが、ボタンではない
-    val notifications = listOf("offsave", "offsave のすべての通知", "保護の一時停止・再開", "保護の無効化・不審な操作", "制限に達した")
+    val notifications = listOf("offsave", "offsave のすべての通知", "監視の一時停止・再開", "監視の無効化・不審な操作", "制限に達した")
     assertFalse(GuardService.looksLikeOurAppInfo(notifications, "offsave"))
     assertFalse(GuardService.looksLikeOurAppInfo(listOf("offsave", "権限", "通知", "許可しない"), "offsave"))
     assertFalse(GuardService.looksLikeOurAppInfo(listOf("offsave", "バックグラウンドのデータ"), "offsave"))

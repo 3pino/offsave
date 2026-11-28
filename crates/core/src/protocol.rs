@@ -15,14 +15,14 @@ pub struct User {
     pub display_name: String,
 }
 
-/// デバイスが送る保護の状態。どれかが外れたら友達に通知する。
+/// デバイスが送る監視の状態。どれかが外れたら友達に通知する。
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeviceFlags {
     pub accessibility: bool,
     pub device_admin: bool,
     pub battery_unrestricted: bool,
     /// 友達が決めたアプリ（決済アプリなど）の間だけ、Accessibility を自分で外している。
-    /// 前面のアプリが離れたら、デバイスが自分で戻す。この間は、保護が外れたとは見なさない。
+    /// 前面のアプリが離れたら、デバイスが自分で戻す。この間は、監視が外れたとは見なさない。
     #[serde(default)]
     pub paused: bool,
 }
@@ -142,7 +142,7 @@ pub enum EventKind {
     UnsupportedBrowser,
     /// デバイスの時計がサーバーと大きくずれている。
     ClockSkew,
-    /// 決済アプリなどのために、保護を一時停止した（または再開した）。
+    /// 決済アプリなどのために、監視を一時停止した（または再開した）。
     ProtectionPaused,
 }
 

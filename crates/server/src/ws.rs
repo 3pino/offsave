@@ -162,11 +162,11 @@ async fn handle(
                     state.pending_loss.lock().unwrap().insert(device_id.to_owned());
                     spawn_loss_check(state.clone(), user.id.clone(), device_id.to_owned(), before);
                 } else if !before.protected() && flags.protected() {
-                    // 猛予のうちに戻った（「無効」をまだ知らせていない）ときは、どちらも知らせない
+                    // 猶予のうちに戻った（「無効」をまだ知らせていない）ときは、どちらも知らせない
                     let quiet = state.pending_loss.lock().unwrap().remove(device_id);
                     if !quiet {
                         emit(state, &user.id, Some(device_id), EventKind::ProtectionRestored,
-                            &format!("{} の保護が有効になりました", prev.name)).await?;
+                            &format!("{} の監視が有効になりました", prev.name)).await?;
                     }
                 }
             }
@@ -274,11 +274,11 @@ async fn handle(
     }
 }
 
-/// 保護が外れているのが猛予（`protection_grace_ms`）を超えて続いていたら、友達に知らせる。
+/// 監視が外れているのが猶予（`protection_grace_ms`）を超えて続いていたら、友達に知らせる。
 fn spawn_loss_check(state: SharedState, user_id: String, device_id: String, before: DeviceFlags) {
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(state.config.protection_grace_ms)).await;
-        // 猛予の間に戻っていれば、もう消えている
+        // 猶予の間に戻っていれば、もう消えている
         if !state.pending_loss.lock().unwrap().remove(&device_id) {
             return;
         }
@@ -302,7 +302,7 @@ fn spawn_loss_check(state: SharedState, user_id: String, device_id: String, befo
         )
         .await
         {
-            tracing::warn!("保護の無効化の通知に失敗: {e:?}");
+            tracing::warn!("監視の無効化の通知に失敗: {e:?}");
         }
     });
 }
