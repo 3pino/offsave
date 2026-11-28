@@ -79,6 +79,12 @@ export interface UsageItem {
   seconds: number;
 }
 
+/** ルール 1 つの利用秒数（中身の区間の和集合。制限の判定と同じ数え方） */
+export interface RuleUsage {
+  rule_id: string;
+  seconds: number;
+}
+
 /** 利用の履歴の 1 つの区切り（1 日、または 1 時間） */
 export interface UsageBucket {
   start: Ms;
@@ -88,6 +94,8 @@ export interface UsageBucket {
   /** その日の曜日（0 = 月 … 6 = 日） */
   weekday: number;
   items: UsageItem[];
+  /** ルールごとの利用（古いサーバーでは無い） */
+  rules?: RuleUsage[];
 }
 
 export interface UsageHistory {

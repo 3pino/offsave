@@ -38,11 +38,12 @@
 
   const pick = $derived(homePick(hidden.has, usagePrefs.showHidden));
   const rules = $derived(status.rules.map((r) => r.rule));
-  const rowsOf = (all: UsageItem[]) =>
+  const rowsOf = (all: UsageItem[], ruleSeconds: Record<string, number>) =>
     buildRows(
       all.filter((u) => usagePrefs.showHidden || !hidden.has(u.key)),
       rules,
       usagePrefs.byRule,
+      ruleSeconds,
     );
 
   function toggleExpanded(id: string) {
@@ -71,7 +72,7 @@
 
 <UsageStats {userId} {status} {pick}>
   {#snippet children(sel)}
-{@const rows = rowsOf(sel.items)}
+{@const rows = rowsOf(sel.items, sel.rules)}
 {@const main = rows.filter((r) => r.seconds > SHORT_SECONDS)}
 {@const restCount = rows.length - main.length}
 {@const shown = (showAll ? rows : main).slice(0, 60)}

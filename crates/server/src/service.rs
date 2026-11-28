@@ -6,7 +6,7 @@ use offsave_core::Ms;
 use offsave_core::engine::used_ms;
 use offsave_core::intervals::{Segment, merge, union_len};
 use offsave_core::protocol::{
-    Event, EventKind, Policy, RuleStatus, UsageBucket, UsageHistory, UsageItem, UserStatus,
+    Event, EventKind, Policy, RuleStatus, RuleUsage, UsageBucket, UsageHistory, UsageItem, UserStatus,
 };
 use offsave_core::time::{HOUR_MS, logical_day, logical_day_of};
 
@@ -115,6 +115,7 @@ pub async fn usage_history(
     let lo = day_list.first().map_or(0, |d| d.start);
     let hi = day_list.last().map_or(0, |d| d.end);
     let segments = usage::segments_of_user(&state.pool, &user.id, None, lo, hi).await?;
+    let stored = rules::list(&state.pool, &user.id).await?;
     let mut by_key: BTreeMap<&str, Vec<(Ms, Ms)>> = BTreeMap::new();
     for s in &segments {
         by_key.entry(&s.key).or_default().push((s.start, s.end));
@@ -133,6 +134,19 @@ pub async fn usage_history(
         items.sort_by(|a, b| b.seconds.cmp(&a.seconds).then_with(|| a.key.cmp(&b.key)));
         items
     };
+    // ルールごとの利用は、中身の区間の和集合（識別子ごとの秒数を足すと、ブラウザとサイトで二重になる）
+    let rules_in = |from: Ms, to: Ms| -> Vec<RuleUsage> {
+        stored
+            .iter()
+            .filter_map(|s| {
+                let seconds = (used_ms(&s.rule, &segments, from, to) / 1000) as u32;
+                (seconds > 0).then(|| RuleUsage {
+                    rule_id: s.rule.id.clone(),
+                    seconds,
+                })
+            })
+            .collect()
+    };
     let mut buckets = Vec::new();
     for day in &day_list {
         if hourly {
@@ -144,6 +158,7 @@ pub async fn usage_history(
                     date: day.date.clone(),
                     weekday: day.weekday,
                     items: items_in(start, end),
+                    rules: rules_in(start, end),
                 });
             }
         } else {
@@ -153,6 +168,7 @@ pub async fn usage_history(
                 date: day.date.clone(),
                 weekday: day.weekday,
                 items: items_in(day.start, day.end),
+                rules: rules_in(day.start, day.end),
             });
         }
     }

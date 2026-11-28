@@ -57,6 +57,13 @@ pub struct UserSettings {
     pub week_start: u8,
 }
 
+/// ルール 1 つの、ある区切りの利用秒数。中身（アプリ・サイト）の区間の和集合なので、ブラウザとサイトが重なる時間は 1 回だけ数える（制限の判定と同じ数え方）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuleUsage {
+    pub rule_id: String,
+    pub seconds: u32,
+}
+
 /// 利用の履歴の 1 つの区切り（1 日、または 1 時間）。識別子ごとの利用秒数（複数デバイスの同時利用は和集合）。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageBucket {
@@ -69,6 +76,9 @@ pub struct UsageBucket {
     /// その日付の曜日（0 = 月 … 6 = 日）。
     pub weekday: u8,
     pub items: Vec<UsageItem>,
+    /// ルールごとの利用秒数（利用がないルールは含めない）。
+    #[serde(default)]
+    pub rules: Vec<RuleUsage>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

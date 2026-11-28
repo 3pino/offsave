@@ -5,6 +5,8 @@
   export interface Selection {
     /** 選んだ日・時間の、全部の利用（`pick` で絞る前） */
     items: UsageItem[];
+    /** ルールごとの利用秒数（中身の区間の和集合。ルールの行の合計に使う） */
+    rules: Record<string, number>;
     /** 一覧の見出し（「今日の利用（2026-11-28）」など） */
     title: string;
   }
@@ -19,23 +21,26 @@
   import { addDays, duration } from '../lib/format';
   import { WEEK_LABELS } from '../lib/limits';
   import { session } from '../lib/session.svelte';
-  import type { UsageHistory, UserStatus } from '../lib/types';
+  import type { RuleUsage, UsageHistory, UserStatus } from '../lib/types';
   import { sumSeconds, weekStartOf } from '../lib/usage';
   import { usagePrefs, type ChartMode } from '../lib/usagePrefs.svelte';
   import UsageChart, { type Bar } from './UsageChart.svelte';
 
   // 利用時間のまとめ: 1 日ごと（週）・1 時間ごと（1 日）の棒グラフと、選んだ日・時間の合計。
   // 棒を押すと、その日・時間に絞る（初めは今日）。`children` に、絞った利用を渡す（一覧用）。
-  // `pick` が true の識別子だけを数える（ホームは「アプリだけ・非表示を除く」、詳細は「その項目だけ」）
+  // `pick` が true の識別子だけを数える（ホームは「アプリだけ・非表示を除く」、詳細は「その項目だけ」）。
+  // `ruleId` を渡すと（ルールの詳細）、識別子ごとの足し算ではなく、ルールの利用秒数（和集合）を使う
   let {
     userId,
     status,
     pick,
+    ruleId,
     children,
   }: {
     userId: string;
     status: UserStatus;
     pick: (key: string) => boolean;
+    ruleId?: string;
     children?: Snippet<[Selection]>;
   } = $props();
 
@@ -83,10 +88,18 @@
   });
 
   // 今日は、状態（3 秒ごと）の値を使う。履歴は 15 秒ごとなので、今日の棒と合計がずれないように
-  function dayItems(b: { date: string; items: UsageItem[] }): UsageItem[] {
+  type Bucketish = { date: string; items: UsageItem[]; rules?: RuleUsage[] };
+  function dayItems(b: Bucketish): UsageItem[] {
     return b.date === today ? status.usage_today : b.items;
   }
-  const daySeconds = (b: { date: string; items: UsageItem[] }) => sumSeconds(dayItems(b), pick);
+  /** ルールごとの利用秒数。今日は状態の値 */
+  function dayRules(b: Bucketish): Record<string, number> {
+    const list = b.date === today ? status.rules.map((r) => ({ rule_id: r.rule.id, seconds: r.used_seconds })) : (b.rules ?? []);
+    return Object.fromEntries(list.map((r) => [r.rule_id, r.seconds]));
+  }
+  /** 棒・合計に出す秒数。ルールの詳細はルールの和集合、それ以外は pick で数える */
+  const valueOf = (items: UsageItem[], rules: Record<string, number>) => (ruleId ? (rules[ruleId] ?? 0) : sumSeconds(items, pick));
+  const daySeconds = (b: Bucketish) => valueOf(dayItems(b), dayRules(b));
   const weekSeconds = $derived((week?.buckets ?? []).reduce((s, b) => s + daySeconds(b), 0));
 
   const dateText = (d: string) => {
@@ -109,7 +122,7 @@
   const hourBars = $derived<Bar[]>(
     (hours?.buckets ?? []).map((b, i) => {
       const h = hourOf(b.start);
-      const v = sumSeconds(b.items, pick);
+      const v = valueOf(b.items, dayRules(b));
       return {
         label: i % 6 === 0 ? `${h}時` : '',
         value: v,
@@ -127,15 +140,16 @@
   const selected = $derived.by(() => {
     if (hourBucket) {
       const name = `${dateText(hourBucket.date)} ${hourOf(hourBucket.start)}時台`;
-      return { items: hourBucket.items, name, title: `${name}の利用` };
+      return { items: hourBucket.items, rules: dayRules(hourBucket), name, title: `${name}の利用` };
     }
     // 履歴がまだ来ていない今日は、状態の値で出す
-    const items = dayBucket ? dayItems(dayBucket) : date === today ? status.usage_today : [];
-    if (date === today) return { items, name: '今日（いまの時点まで）', title: `今日の利用（${today}）` };
+    const b: Bucketish = dayBucket ?? { date, items: [] };
+    const [items, rules] = [dayItems(b), dayRules(b)];
+    if (date === today) return { items, rules, name: '今日（いまの時点まで）', title: `今日の利用（${today}）` };
     const name = dayBucket ? dayText(dayBucket.date, dayBucket.weekday) : dateText(date);
-    return { items, name, title: `${name}の利用` };
+    return { items, rules, name, title: `${name}の利用` };
   });
-  const selectedSeconds = $derived(sumSeconds(selected.items, pick));
+  const selectedSeconds = $derived(valueOf(selected.items, selected.rules));
 
   // 右の合計: 時間を選んでいるときは、その日。それ以外は、その週
   const wide = $derived(
@@ -200,7 +214,7 @@
     <UsageChart bars={hourBars} selected={pickedHour} max={3600} onselect={(i) => (pickedHour = pickedHour === i ? null : i)} />
   {/if}
 
-  {@render children?.({ items: selected.items, title: selected.title })}
+  {@render children?.({ items: selected.items, rules: selected.rules, title: selected.title })}
 </section>
 
 <style>

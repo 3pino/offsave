@@ -883,6 +883,65 @@ async fn usage_history_by_day_and_by_hour_and_the_week_start_setting() {
 }
 
 #[tokio::test]
+async fn rule_usage_in_the_history_counts_overlapping_time_once() {
+    let s = DevServer::start().await;
+    let (alice, bob) = (Client::new(&s, "alice@t"), Client::new(&s, "bob@t"));
+    let (a_id, _) = make_friends(&alice, &bob).await;
+    let (code, rule) = bob
+        .post(
+            &format!("/users/{a_id}/rules"),
+            json!({
+                "name": "動画",
+                "targets": [
+                    { "label": "Firefox", "keys": ["android:org.mozilla.firefox"] },
+                    { "label": "youtube.com", "keys": ["domain:youtube.com"] },
+                ],
+                "limits": [{ "type": "daily_total", "seconds": 3600 }],
+            }),
+        )
+        .await;
+    assert_eq!(code, 200, "{rule}");
+    let rule_id = rule["id"].as_str().unwrap().to_owned();
+
+    let mut phone = alice.device("phone").await;
+    phone.heartbeat(protected()).await;
+    // 昨日の 1 時間目に、Firefox で YouTube を 10 分（アプリとサイトの区間が重なる）。さらに、同じ時間の続きで Firefox だけ 5 分
+    let today = offsave_core::time::logical_day(now_ms(), &offsave_core::time::Clock::default());
+    let start = today.start - 86_400_000 + 3_600_000;
+    let seg = |key: &str, start: i64, len: i64| offsave_core::intervals::Segment {
+        key: key.into(),
+        start,
+        end: start + len,
+    };
+    phone
+        .send(&DeviceMsg::Usage {
+            segments: vec![
+                seg("android:org.mozilla.firefox", start, 900_000),
+                seg("domain:youtube.com", start, 600_000),
+            ],
+            labels: vec![],
+        })
+        .await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let from = offsave_core::time::format_date(offsave_core::time::parse_date(&today.date).unwrap() - 1);
+    let (code, v) = bob.get(&format!("/users/{a_id}/usage?from={from}&days=1")).await;
+    assert_eq!(code, 200, "{v}");
+    let h: offsave_core::protocol::UsageHistory = serde_json::from_value(v).unwrap();
+    // 識別子ごとはそれぞれ、15 分と 10 分。ルールは和集合なので 15 分（25 分ではない）
+    let secs = |k: &str| h.buckets[0].items.iter().find(|i| i.key == k).unwrap().seconds;
+    assert_eq!((secs("android:org.mozilla.firefox"), secs("domain:youtube.com")), (900, 600));
+    assert_eq!(h.buckets[0].rules.len(), 1);
+    assert_eq!((h.buckets[0].rules[0].rule_id.as_str(), h.buckets[0].rules[0].seconds), (rule_id.as_str(), 900));
+
+    // 1 時間ごとも同じ
+    let (_, v) = bob.get(&format!("/users/{a_id}/usage?from={from}&hourly=true")).await;
+    let h: offsave_core::protocol::UsageHistory = serde_json::from_value(v).unwrap();
+    assert_eq!(h.buckets[1].rules[0].seconds, 900);
+    assert!(h.buckets[0].rules.is_empty());
+}
+
+#[tokio::test]
 async fn device_token_must_match_user() {
     let s = DevServer::start().await;
     let alice = Client::new(&s, "alice@t");

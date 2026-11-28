@@ -126,13 +126,13 @@
       {/if}
     </div>
 
-    <UsageStats {userId} {status} {pick}>
+    <UsageStats {userId} {status} {pick} ruleId={target.kind === 'rule' ? target.id : undefined}>
       {#snippet children(sel)}
         <!-- ルール全体のときは、選んだ日・時間の中身を並べる -->
         {#if target.kind === 'rule'}
           {@const members = sel.items.filter((u) => pick(u.key)).sort((a, b) => b.seconds - a.seconds)}
           <section class="block">
-            <h2 class="block-title">{sel.title}（合計 {duration(sumSeconds(members, () => true))}）</h2>
+            <h2 class="block-title">{sel.title}（合計 {duration(sel.rules[target.id] ?? sumSeconds(members, () => true))}）</h2>
             {#each members as m (m.key)}
               <div class="row member">
                 <KeyIcon key={m.key} size={24} />

@@ -44,11 +44,13 @@ const bySeconds = (a: { seconds: number }, b: { seconds: number }) => b.seconds 
 export const isLimited = (rules: Rule[], key: string) => rules.some((r) => r.enabled && ruleMatches(r, key));
 
 /**
- * 一覧の行を作る。`byRule` なら、ルールに入っているものは、ルールの行にまとめる（合計 = 中身の合計）。
+ * 一覧の行を作る。`byRule` なら、ルールに入っているものは、ルールの行にまとめる。
+ * ルールの合計は、`ruleSeconds`（サーバーが出す、中身の区間の和集合）。無ければ中身の足し算。
+ * （ブラウザとサイトは同じ時間を両方が数えるので、足し算だと二重になる）
  * ただし対象が 1 つだけのルールは、まとめずに、そのまま 1 行で出す。
  * 1 つのアプリ・サイトは 1 つのルールにしか入らないので、二重には数えない。多い順。
  */
-export function buildRows(items: UsageItem[], rules: Rule[], byRule: boolean): UsageRow[] {
+export function buildRows(items: UsageItem[], rules: Rule[], byRule: boolean, ruleSeconds: Record<string, number> = {}): UsageRow[] {
   const single = (u: UsageItem): UsageRow => ({ kind: 'key', key: u.key, seconds: u.seconds, limited: isLimited(rules, u.key) });
   if (!byRule) return items.map(single).sort(bySeconds);
   const rows: UsageRow[] = [];
@@ -65,7 +67,10 @@ export function buildRows(items: UsageItem[], rules: Rule[], byRule: boolean): U
   }
   for (const rule of rules) {
     const children = (grouped.get(rule.id) ?? []).sort(bySeconds);
-    if (children.length > 0) rows.push({ kind: 'rule', rule, seconds: sumSeconds(children, () => true), children, limited: rule.enabled });
+    if (children.length > 0) {
+      const seconds = ruleSeconds[rule.id] ?? sumSeconds(children, () => true);
+      rows.push({ kind: 'rule', rule, seconds, children, limited: rule.enabled });
+    }
   }
   return rows.sort(bySeconds);
 }

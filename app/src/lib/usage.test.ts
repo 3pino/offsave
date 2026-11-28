@@ -78,6 +78,14 @@ describe('合計と一覧', () => {
     ]);
   });
 
+  it('ルールの合計は、サーバーの和集合の秒数を使う（足し算だと二重になる）', () => {
+    const rules = [rule('r1', '', [['YouTube', 'android:youtube'], ['youtube.com', 'domain:youtube.com']])];
+    const rows = buildRows(items, rules, true, { r1: 900 });
+    expect(rows.find((r) => r.kind === 'rule')?.seconds).toBe(900);
+    // 無いときは足し算
+    expect(buildRows(items, rules, true).find((r) => r.kind === 'rule')?.seconds).toBe(1100);
+  });
+
   it('対象が 1 つだけのルールは、まとめない。制限の対象は limited', () => {
     const rules = [rule('r1', '', [['YouTube', 'android:youtube']]), { ...rule('r2', '', [['ゲーム', 'android:game']]), enabled: false }];
     const rows = buildRows(items, rules, true);
