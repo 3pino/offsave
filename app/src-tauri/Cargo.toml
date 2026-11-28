@@ -1,6 +1,6 @@
 [package]
 name = "offsave-app"
-version = "0.3.6"
+version = "0.3.7"
 description = "offsave client"
 edition = "2021"
 publish = false
