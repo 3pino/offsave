@@ -16,7 +16,7 @@
   import TextInput from '@3pino/ui-kit-web/TextInput.svelte';
   import { errorText } from '../lib/errors';
   import { clock } from '../lib/format';
-  import { parseTime } from '../lib/limits';
+  import { parseTime, WEEK_LABELS } from '../lib/limits';
   import { isAndroid, native } from '../lib/native';
   import { protection } from '../lib/protection.svelte';
   import { session } from '../lib/session.svelte';
@@ -56,9 +56,11 @@
   async function saveSettings(next: UserSettings) {
     busy = true;
     try {
+      // 友達に通知されるのは、タイムゾーンと 1 日の始まりの変更（週の始まりは表示だけの設定）
+      const notified = settings !== null && (settings.timezone !== next.timezone || settings.day_boundary_min !== next.day_boundary_min);
       settings = await api.updateSettings(next);
       boundary = clock(settings.day_boundary_min);
-      ui.toast('保存しました（友達に通知されます）');
+      ui.toast(notified ? '保存しました（友達に通知されます）' : '保存しました');
     } catch (e) {
       ui.toast(errorText(e), 'error');
     } finally {
@@ -161,7 +163,13 @@
           <Button variant="primary" disabled={busy} onclick={() => saveSettings({ ...settings!, timezone: settings!.timezone.trim() })}>保存</Button>
         </div>
       </label>
-      <p class="muted small">変更は友達に通知されます。</p>
+      <label class="field">
+        <span class="field-label">週の始まり</span>
+        <select class="input week" value={settings.week_start} disabled={busy} onchange={(e) => saveSettings({ ...settings!, week_start: Number(e.currentTarget.value) })}>
+          {#each WEEK_LABELS as w, i (i)}<option value={i}>{w}曜日</option>{/each}
+        </select>
+      </label>
+      <p class="muted small">タイムゾーンと 1 日の始まりの変更は、友達に通知されます。週の始まりは、週の合計と棒グラフの表示だけに使います。</p>
     {/if}
   </Section>
 
@@ -227,6 +235,9 @@
     white-space: pre-wrap;
   }
   .time {
+    width: 130px;
+  }
+  .week {
     width: 130px;
   }
   .version-control {

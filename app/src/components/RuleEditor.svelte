@@ -7,7 +7,7 @@
   import TextInput from '@3pino/ui-kit-web/TextInput.svelte';
   import Toggle from '@3pino/ui-kit-web/Toggle.svelte';
   import { errorText } from '../lib/errors';
-  import { limitError, newLimit } from '../lib/limits';
+  import { keysOverlap, limitError, newLimit, ruleDisplayName } from '../lib/limits';
   import { ui } from '../lib/ui.svelte';
   import type { Limit, Rule, RuleInput, Target } from '../lib/types';
   import KeyIcon from './KeyIcon.svelte';
@@ -20,6 +20,8 @@
     ownerName,
     initial = null,
     candidates = [],
+    otherRules = [],
+    presetTargets = [],
     onsave,
     oncancel,
   }: {
@@ -28,6 +30,10 @@
     initial?: Rule | null;
     /** 対象に選べるアプリ・サイト（ポップアップに出す） */
     candidates?: { key: string; label: string }[];
+    /** 同じ人のほかのルール（1 つのアプリ・サイトは 1 つのルールにしか入れられない） */
+    otherRules?: Rule[];
+    /** 新しいルールのとき、あらかじめ対象に入れておくもの */
+    presetTargets?: Target[];
     onsave: (rule: RuleInput) => Promise<void>;
     oncancel: () => void;
   } = $props();
@@ -41,7 +47,9 @@
   let step = $state<1 | 2>(1);
   let name = $state(init?.name ?? '');
   let enabled = $state(init?.enabled ?? true);
-  let targets = $state.raw<Target[]>(init ? init.targets.map((t) => ({ label: t.label, keys: [...t.keys] })) : []);
+  let targets = $state.raw<Target[]>(
+    (init ? init.targets : untrack(() => presetTargets)).map((t) => ({ label: t.label, keys: [...t.keys] })),
+  );
   let limits = $state<Limit[]>(init ? init.limits.map((l) => ({ ...l })) : [newLimit('daily_total')]);
 
   let picking = $state(false);
@@ -56,8 +64,14 @@
 
   const has = (key: string) => targets.some((t) => t.keys.includes(key));
 
+  /** ほかのルールにすでに入っているなら、そのルールの名前 */
+  function blockedBy(key: string): string | null {
+    const other = otherRules.find((r) => r.targets.some((t) => t.keys.some((k) => keysOverlap(k, key))));
+    return other ? ruleDisplayName(other) : null;
+  }
+
   function addTarget(key: string, label: string) {
-    if (!has(key)) targets = [...targets, { label, keys: [key] }];
+    if (!has(key) && !blockedBy(key)) targets = [...targets, { label, keys: [key] }];
   }
 
   function removeTarget(key: string) {
@@ -66,7 +80,6 @@
 
   function next() {
     error = '';
-    if (!name.trim()) return (error = 'ルールの名前を入力してください');
     if (targets.length === 0) return (error = '対象のアプリかサイトを 1 つ以上選んでください');
     step = 2;
   }
@@ -100,8 +113,9 @@
 
   {#if step === 1}
     <label class="field">
-      <span class="field-label">ルールの名前</span>
+      <span class="field-label">ルールの名前（任意）</span>
       <TextInput bind:value={name} placeholder="例: ゲーム" />
+      <span class="muted small">空欄なら、「YouTube」「YouTube ほか3件」のように、対象から名前を付けます。</span>
     </label>
     {#if selfEdit}
       <p class="muted small">自分でできるのは、厳しくする変更だけです（名前の変更・対象や制限の追加・曜日の追加・1 日の合計時間の短縮・使えない時間帯の拡大）。緩める変更は友達に頼んでください。</p>
@@ -126,7 +140,7 @@
     {#if error}<p class="error-text">{error}</p>{/if}
   {:else}
     <div class="card summary">
-      <div class="card-title">{name.trim()}</div>
+      <div class="card-title">{ruleDisplayName({ name, targets })}</div>
       <div class="muted small">{targets.map((t) => t.label).join('、')}</div>
     </div>
 
@@ -152,7 +166,7 @@
 </Page>
 
 {#if picking}
-  <TargetPicker {candidates} picked={has} onpick={addTarget} onunpick={removeTarget} onclose={() => (picking = false)} />
+  <TargetPicker {candidates} picked={has} blocked={blockedBy} onpick={addTarget} onunpick={removeTarget} onclose={() => (picking = false)} />
 {/if}
 
 <style>

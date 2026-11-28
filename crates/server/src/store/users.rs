@@ -10,6 +10,7 @@ pub struct UserRow {
     pub display_name: String,
     pub timezone: String,
     pub day_boundary_min: i64,
+    pub week_start: i64,
     pub created_at: i64,
 }
 
@@ -26,6 +27,7 @@ impl UserRow {
         UserSettings {
             timezone: self.timezone.clone(),
             day_boundary_min: self.day_boundary_min as u32,
+            week_start: self.week_start.clamp(0, 6) as u8,
         }
     }
 }
@@ -79,10 +81,12 @@ pub async fn update_settings(
     id: &str,
     timezone: &str,
     day_boundary_min: u32,
+    week_start: u8,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE users SET timezone = ?, day_boundary_min = ? WHERE id = ?")
+    sqlx::query("UPDATE users SET timezone = ?, day_boundary_min = ?, week_start = ? WHERE id = ?")
         .bind(timezone)
         .bind(day_boundary_min as i64)
+        .bind(week_start as i64)
         .bind(id)
         .execute(pool)
         .await?;

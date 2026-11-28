@@ -1,5 +1,5 @@
 import { clock, duration } from './format';
-import type { Limit } from './types';
+import type { Limit, Rule } from './types';
 
 // ルールの「制限」まわりの、画面に依らない計算（曜日の指定・今日の上限・文章）。
 
@@ -33,6 +33,32 @@ export function limitText(l: Limit): string {
     return `${days}1日 ${duration(l.seconds)}まで`;
   }
   return `${daysLabel(l.days)} ${clock(l.start_min)}–${clock(l.end_min)} は使えない`;
+}
+
+/** 識別子が対象に当たるか。`domain:` はサブドメインも含む（crates/core の `key_matches` と同じ） */
+export function keyMatches(target: string, key: string): boolean {
+  if (target === key) return true;
+  return target.startsWith('domain:') && key.startsWith('domain:') && key.endsWith(`.${target.slice('domain:'.length)}`);
+}
+
+/** ルールの対象に、この識別子が当たるか */
+export function ruleMatches(rule: Pick<Rule, 'targets'>, key: string): boolean {
+  return rule.targets.some((t) => t.keys.some((k) => keyMatches(k, key)));
+}
+
+/** 2 つの識別子が、同じものを指しうるか（サブドメインはどちらかがもう一方に含まれれば重なる） */
+export const keysOverlap = (a: string, b: string) => keyMatches(a, b) || keyMatches(b, a);
+
+/**
+ * 画面に出すルールの名前。名前が空なら、対象から作る（「YouTube」「YouTube ほか3件」）。
+ * crates/core の `Rule::display_name` と同じ。
+ */
+export function ruleDisplayName(rule: Pick<Rule, 'name' | 'targets'>): string {
+  const name = rule.name.trim();
+  if (name) return name;
+  const [first, ...rest] = rule.targets;
+  if (!first) return 'ルール';
+  return rest.length === 0 ? first.label : `${first.label} ほか${rest.length}件`;
 }
 
 /** 論理日（曜日 `weekday`）に効く、1 日の合計の上限（秒）。いくつかあれば一番小さいもの。無ければ null */

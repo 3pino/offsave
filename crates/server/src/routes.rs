@@ -34,6 +34,7 @@ pub fn router() -> Router<SharedState> {
         .route("/devices", post(register_device))
         .route("/devices/{id}", delete(remove_device))
         .route("/users/{id}/status", get(user_status))
+        .route("/users/{id}/usage", get(user_usage))
         .route("/users/{id}/rules", post(create_rule))
         .route("/users/{id}/overrides", post(create_override))
         .route("/users/{id}/pause-apps", put(set_pause_apps))
@@ -68,21 +69,28 @@ async fn update_settings(
     if body.day_boundary_min >= 1440 {
         return Err(AppError::bad_request("日付の境界は 0〜1439 分で指定してください"));
     }
-    users::update_settings(&state.pool, &user.id, &body.timezone, body.day_boundary_min).await?;
-    emit(
-        &state,
-        &user.id,
-        None,
-        EventKind::SettingsChanged,
-        &format!(
-            "タイムゾーンを {}、日付の境界を {:02}:{:02} にしました",
-            body.timezone,
-            body.day_boundary_min / 60,
-            body.day_boundary_min % 60
-        ),
-    )
-    .await?;
-    state.hub.refresh_policy(&user.id);
+    if body.week_start > 6 {
+        return Err(AppError::bad_request("週の始まりは 0（月）〜6（日）で指定してください"));
+    }
+    let before = user.settings();
+    users::update_settings(&state.pool, &user.id, &body.timezone, body.day_boundary_min, body.week_start).await?;
+    // 週の始まりは、表示だけの設定（制限に関係しない）なので、友達には知らせない
+    if before.timezone != body.timezone || before.day_boundary_min != body.day_boundary_min {
+        emit(
+            &state,
+            &user.id,
+            None,
+            EventKind::SettingsChanged,
+            &format!(
+                "タイムゾーンを {}、日付の境界を {:02}:{:02} にしました",
+                body.timezone,
+                body.day_boundary_min / 60,
+                body.day_boundary_min % 60
+            ),
+        )
+        .await?;
+        state.hub.refresh_policy(&user.id);
+    }
     Ok(Json(body))
 }
 
@@ -351,6 +359,39 @@ async fn user_status(
 }
 
 #[derive(Deserialize)]
+struct UsageQuery {
+    /// 論理日の日付 `YYYY-MM-DD`（この日から `days` 日ぶん）。
+    from: String,
+    #[serde(default = "one_week")]
+    days: u32,
+    /// true なら、`from` の 1 日を 1 時間ごと（24 個）に分ける。
+    #[serde(default)]
+    hourly: bool,
+}
+
+fn one_week() -> u32 {
+    7
+}
+
+/// 利用の履歴（日ごと・時間ごと）。本人と友達だけが見られる。
+async fn user_usage(
+    State(state): State<SharedState>,
+    CurrentUser(me): CurrentUser,
+    Path(id): Path<String>,
+    axum::extract::Query(q): axum::extract::Query<UsageQuery>,
+) -> AppResult<Json<offsave_core::protocol::UsageHistory>> {
+    if !can_view(&state, &me.id, &id).await? {
+        return Err(AppError::forbidden("友達だけが見られます"));
+    }
+    let from = parse_date(&q.from).ok_or_else(|| AppError::bad_request("日付は YYYY-MM-DD で指定してください"))?;
+    if q.days > 31 {
+        return Err(AppError::bad_request("一度に見られるのは 31 日ぶんまでです"));
+    }
+    let target = target_user(&state, &id).await?;
+    Ok(Json(service::usage_history(&state, &target, from, q.days, q.hourly, now_ms()).await?))
+}
+
+#[derive(Deserialize)]
 struct RuleInput {
     name: String,
     targets: Vec<Target>,
@@ -375,6 +416,29 @@ impl RuleInput {
         rule.validate().map_err(AppError::bad_request)?;
         Ok(rule)
     }
+}
+
+/// 1 つのアプリ・サイトは、1 つのルールにしか入れられない。`rule` の対象が、同じ人のほかのルールと重なっていないかを確かめる。
+async fn check_targets_free(state: &SharedState, owner_id: &str, rule: &Rule) -> AppResult<()> {
+    for other in rules::list(&state.pool, owner_id).await? {
+        if other.rule.id == rule.id {
+            continue;
+        }
+        for t in &rule.targets {
+            let clash = t
+                .keys
+                .iter()
+                .any(|k| other.rule.targets.iter().any(|o| o.keys.iter().any(|ok| offsave_core::model::keys_overlap(ok, k))));
+            if clash {
+                return Err(AppError::bad_request(format!(
+                    "「{}」は、ルール「{}」にすでに入っています（1 つのアプリ・サイトは、1 つのルールにしか入れられません）",
+                    t.label,
+                    other.rule.display_name()
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// 本人か友達か。`friend_only` なら友達だけ（本人は不可）。
@@ -421,8 +485,9 @@ async fn create_rule(
     require_access(&state, &me, &owner_id, false).await?;
     let owner = target_user(&state, &owner_id).await?;
     let mut rule = body.into_rule()?;
+    check_targets_free(&state, &owner.id, &rule).await?;
     rule.id = rules::insert(&state.pool, &owner.id, &me.id, &rule).await?;
-    rule_changed(&state, &owner, &me, &format!("ルール「{}」を追加しました", rule.name)).await?;
+    rule_changed(&state, &owner, &me, &format!("ルール「{}」を追加しました", rule.display_name())).await?;
     Ok(Json(rule))
 }
 
@@ -446,8 +511,9 @@ async fn update_rule(
         rule.check_not_looser_than(&stored.rule).map_err(AppError::forbidden)?;
     }
     let owner = target_user(&state, &stored.owner_id).await?;
+    check_targets_free(&state, &owner.id, &rule).await?;
     rules::update(&state.pool, &id, &rule).await?;
-    rule_changed(&state, &owner, &me, &format!("ルール「{}」を変更しました", rule.name)).await?;
+    rule_changed(&state, &owner, &me, &format!("ルール「{}」を変更しました", rule.display_name())).await?;
     Ok(Json(rule))
 }
 
@@ -462,7 +528,7 @@ async fn delete_rule(
     require_access(&state, &me, &stored.owner_id, true).await?;
     let owner = target_user(&state, &stored.owner_id).await?;
     rules::delete(&state.pool, &id).await?;
-    rule_changed(&state, &owner, &me, &format!("ルール「{}」を削除しました", stored.rule.name)).await?;
+    rule_changed(&state, &owner, &me, &format!("ルール「{}」を削除しました", stored.rule.display_name())).await?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 

@@ -6,9 +6,11 @@
   import { session } from '../lib/session.svelte';
   import { ui } from '../lib/ui.svelte';
   import type { DeviceInfo, Friend, UserStatus } from '../lib/types';
+  import type { UsageTarget } from '../lib/usage';
   import DeviceList from './DeviceList.svelte';
   import Page from './Page.svelte';
-  import PersonStatus from './PersonStatus.svelte';
+  import UsageDetail from './UsageDetail.svelte';
+  import UsagePanel from './UsagePanel.svelte';
 
   let { friend, onback }: { friend: Friend; onback: () => void } = $props();
 
@@ -61,8 +63,18 @@
       ui.toast(errorText(e), 'error');
     }
   }
+
+  // 利用の詳細（アプリ・サイト・ルール）。戻る操作で、友達の画面に戻る
+  let detail = $state<UsageTarget | null>(null);
+  $effect(() => {
+    if (!detail) return;
+    return ui.pushLayer(() => (detail = null));
+  });
 </script>
 
+{#if detail && status}
+  <UsageDetail userId={friend.user.id} ownerName="{friend.user.display_name} さん" {status} target={detail} onback={() => (detail = null)} />
+{:else}
 <Page title="{friend.user.display_name} さん" {onback}>
   <div><Button icon={ListChecks} onclick={() => ui.openRulesOf(friend.user.id)}>この人のルールを見る・変える</Button></div>
   {#if status}
@@ -70,10 +82,11 @@
       <h2 class="block-title">デバイス</h2>
       <DeviceList devices={status.devices} onremove={removeDevice} />
     </section>
-    <PersonStatus {status} />
+    <UsagePanel userId={friend.user.id} {status} onopen={(t) => (detail = t)} />
   {/if}
   <div><Button variant="danger" onclick={dissolve}>友達を解消する</Button></div>
 </Page>
+{/if}
 
 <style>
   .detail-block {

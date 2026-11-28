@@ -6,8 +6,10 @@
   import { session } from '../lib/session.svelte';
   import { ui } from '../lib/ui.svelte';
   import type { UserStatus } from '../lib/types';
+  import type { UsageTarget } from '../lib/usage';
   import Page from './Page.svelte';
-  import PersonStatus from './PersonStatus.svelte';
+  import UsageDetail from './UsageDetail.svelte';
+  import UsagePanel from './UsagePanel.svelte';
 
   const saved = $derived(session.saved!);
   const api = $derived(session.api!);
@@ -29,8 +31,18 @@
   });
 
   const ns = $derived(protection.ns);
+
+  // 利用の詳細（アプリ・サイト・ルール）。戻る操作で、ホームに戻る
+  let detail = $state<UsageTarget | null>(null);
+  $effect(() => {
+    if (!detail) return;
+    return ui.pushLayer(() => (detail = null));
+  });
 </script>
 
+{#if detail && status}
+  <UsageDetail userId={saved.userId} ownerName="あなた" {status} target={detail} onback={() => (detail = null)} />
+{:else}
 <Page title="{saved.userName} さん" header={false}>
   {#if ns && protection.incomplete}
     <div class="card card-warn">
@@ -45,6 +57,7 @@
   {/if}
 
   {#if status}
-    <PersonStatus {status} />
+    <UsagePanel userId={saved.userId} {status} onopen={(t) => (detail = t)} />
   {/if}
 </Page>
+{/if}

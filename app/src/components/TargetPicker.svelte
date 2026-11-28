@@ -14,6 +14,7 @@
     title = 'アプリ・サイトを追加',
     candidates,
     picked,
+    blocked = () => null,
     onpick,
     onunpick,
     onclose,
@@ -25,6 +26,8 @@
     candidates: { key: string; label: string }[];
     /** すでに選ばれているか */
     picked: (key: string) => boolean;
+    /** ほかのルールにすでに入っていて選べないなら、そのルールの名前（1 つのアプリ・サイトは 1 つのルールにしか入れられない） */
+    blocked?: (key: string) => string | null;
     onpick: (key: string, label: string) => void;
     onunpick: (key: string) => void;
     onclose: () => void;
@@ -81,20 +84,25 @@
   <div class="picker-list scroll">
     {#if showManual && manualKey}
       {@const key = manualKey}
-      <button type="button" class="pick-row" onclick={() => toggle(key, keyName(key))}>
+      {@const by = blocked(key)}
+      <button type="button" class="pick-row" disabled={by !== null} onclick={() => toggle(key, keyName(key))}>
         <KeyIcon {key} size={28} />
-        <span class="pick-name">「{keyName(key)}」を追加</span>
-        {#if picked(key)}<Check size={18} />{:else}<Plus size={18} />{/if}
+        <span class="pick-name">
+          「{keyName(key)}」を追加
+          {#if by}<span class="muted small">ルール「{by}」に入っています</span>{/if}
+        </span>
+        {#if picked(key)}<Check size={18} />{:else if !by}<Plus size={18} />{/if}
       </button>
     {/if}
     {#each visible as c (c.key)}
-      <button type="button" class="pick-row" class:pick-on={picked(c.key)} onclick={() => toggle(c.key, c.label)}>
+      {@const by = picked(c.key) ? null : blocked(c.key)}
+      <button type="button" class="pick-row" class:pick-on={picked(c.key)} disabled={by !== null} onclick={() => toggle(c.key, c.label)}>
         <KeyIcon key={c.key} size={28} />
         <span class="pick-name">
           {c.label}
-          <span class="muted small">{c.key.startsWith('domain:') ? 'サイト' : keyName(c.key)}</span>
+          <span class="muted small">{by ? `ルール「${by}」に入っています` : c.key.startsWith('domain:') ? 'サイト' : keyName(c.key)}</span>
         </span>
-        {#if picked(c.key)}<Check size={18} />{:else}<Plus size={18} />{/if}
+        {#if picked(c.key)}<Check size={18} />{:else if !by}<Plus size={18} />{/if}
       </button>
     {:else}
       {#if !showManual}
@@ -144,6 +152,10 @@
   }
   .pick-on {
     color: var(--accent, inherit);
+  }
+  .pick-row:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   .pick-name {
     flex: 1;

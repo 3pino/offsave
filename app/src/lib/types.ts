@@ -64,6 +64,8 @@ export interface DeviceInfo {
 export interface UserSettings {
   timezone: string;
   day_boundary_min: number;
+  /** 週の始まりの曜日（0 = 月 … 6 = 日）。週の合計と棒グラフの表示にだけ使う */
+  week_start: number;
 }
 
 export interface RuleStatus {
@@ -75,6 +77,22 @@ export interface RuleStatus {
 export interface UsageItem {
   key: string;
   seconds: number;
+}
+
+/** 利用の履歴の 1 つの区切り（1 日、または 1 時間） */
+export interface UsageBucket {
+  start: Ms;
+  end: Ms;
+  /** この区切りが属する論理日 */
+  date: string;
+  /** その日の曜日（0 = 月 … 6 = 日） */
+  weekday: number;
+  items: UsageItem[];
+}
+
+export interface UsageHistory {
+  hourly: boolean;
+  buckets: UsageBucket[];
 }
 
 export interface KeyLabel {

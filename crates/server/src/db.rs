@@ -24,6 +24,11 @@ pub async fn connect(path: &Path) -> Result<SqlitePool, sqlx::Error> {
         .connect_with(options)
         .await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
+    // 1 つのアプリ・サイトを複数のルールに入れられなくしたので、古いデータの重なりを直す
+    let fixed = crate::store::rules::dedupe_targets(&pool).await?;
+    if fixed > 0 {
+        tracing::warn!(rules = fixed, "ルールの対象の重なりを直しました");
+    }
     Ok(pool)
 }
 

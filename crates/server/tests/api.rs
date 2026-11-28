@@ -254,7 +254,11 @@ async fn permissions_on_rules_and_status() {
     );
 
     // 本人でも、自分に新しいルールを足すのはよい（厳しくする方向）
-    assert_eq!(alice.post(&format!("/users/{a_id}/rules"), game_rule(600)).await.0, 200);
+    let mut own = game_rule(600);
+    own["targets"] = json!([{ "label": "動画", "keys": ["android:com.example.video"] }]);
+    assert_eq!(alice.post(&format!("/users/{a_id}/rules"), own).await.0, 200);
+    // すでにルールにあるアプリを、もう 1 つのルールに入れることはできない
+    assert_eq!(alice.post(&format!("/users/{a_id}/rules"), game_rule(600)).await.0, 400);
 
     // 不正なルールは弾く
     let (code, _) = bob
@@ -437,7 +441,7 @@ async fn rule_keeps_several_limits_with_weekdays() {
     let (code, _) = bob
         .post(
             &format!("/users/{a_id}/rules"),
-            json!({ "name": "x", "targets": [{"label":"a","keys":["android:a"]}], "limits": [{"type":"window","days":0,"start_min":0,"end_min":60}] }),
+            json!({ "name": "x", "targets": [{"label":"b","keys":["android:b"]}], "limits": [{"type":"window","days":0,"start_min":0,"end_min":60}] }),
         )
         .await;
     assert_eq!(code, 400);
@@ -734,6 +738,148 @@ async fn app_icons_are_shared_and_sites_never_reach_private_hosts() {
         assert_eq!(bob.get_raw(&format!("/icons?key=domain:{host}")).await.0, 404, "{host}");
     }
     assert_eq!(bob.get_raw("/icons?key=nonsense").await.0, 400);
+}
+
+#[tokio::test]
+async fn a_target_belongs_to_only_one_rule_and_the_name_is_optional() {
+    let s = DevServer::start().await;
+    let (alice, bob) = (Client::new(&s, "alice@t"), Client::new(&s, "bob@t"));
+    let (a_id, _) = make_friends(&alice, &bob).await;
+    let limit = json!([{ "type": "daily_total", "seconds": 3600 }]);
+    let rule = |name: &str, label: &str, key: &str| {
+        json!({ "name": name, "targets": [{ "label": label, "keys": [key] }], "limits": limit })
+    };
+
+    // 名前は空でよい（保存は空のまま）
+    let (code, first) = bob.post(&format!("/users/{a_id}/rules"), rule("", "YouTube", "domain:youtube.com")).await;
+    assert_eq!(code, 200, "{first}");
+    assert_eq!(first["name"], "");
+
+    // 同じサイトや、そのサブドメインを別のルールに入れることはできない
+    for key in ["domain:youtube.com", "domain:m.youtube.com"] {
+        let (code, v) = bob.post(&format!("/users/{a_id}/rules"), rule("別", "別", key)).await;
+        assert_eq!(code, 400, "{key}: {v}");
+        assert!(v["message"].as_str().unwrap().contains("YouTube"), "{v}");
+    }
+    let (code, second) = bob.post(&format!("/users/{a_id}/rules"), rule("", "Twitch", "android:tv.twitch")).await;
+    assert_eq!(code, 200);
+    // 変更でも同じ（自分自身の対象は、そのままでよい）
+    let second_id = second["id"].as_str().unwrap();
+    let (code, _) = bob.put(&format!("/rules/{second_id}"), rule("", "Twitch", "android:tv.twitch")).await;
+    assert_eq!(code, 200);
+    let (code, _) = bob.put(&format!("/rules/{second_id}"), rule("", "YouTube", "domain:youtube.com")).await;
+    assert_eq!(code, 400);
+
+    // デバイスへは、空の名前を対象から作った名前にして渡す
+    let mut phone = alice.device("phone").await;
+    let policy = phone.heartbeat(protected()).await;
+    let names: Vec<_> = policy.rules.iter().map(|r| r.name.as_str()).collect();
+    assert_eq!(names, vec!["YouTube", "Twitch"]);
+}
+
+#[tokio::test]
+async fn old_overlapping_rules_are_repaired_when_the_server_starts() {
+    use offsave_core::model::{Limit, Rule, Target};
+    let s = DevServer::start().await;
+    let alice = Client::new(&s, "alice@t");
+    let a_id = alice.id().await;
+    let rule = |name: &str, keys: &[&str]| Rule {
+        id: String::new(),
+        name: name.into(),
+        targets: keys
+            .iter()
+            .map(|k| Target { label: (*k).into(), keys: vec![(*k).into()] })
+            .collect(),
+        limits: vec![Limit::DailyTotal { days: 127, seconds: 600 }],
+        enabled: true,
+    };
+    // 旧データ（重なりを拒む前に作られたもの）を、API を通さずに用意する
+    let pool = &s.state.pool;
+    let a = offsave_server::store::rules::insert(pool, &a_id, &a_id, &rule("A", &["android:x", "domain:y.com"])).await.unwrap();
+    let b = offsave_server::store::rules::insert(pool, &a_id, &a_id, &rule("B", &["android:x", "domain:www.y.com", "android:z"])).await.unwrap();
+    let c = offsave_server::store::rules::insert(pool, &a_id, &a_id, &rule("C", &["android:x"])).await.unwrap();
+
+    assert_eq!(offsave_server::store::rules::dedupe_targets(pool).await.unwrap(), 2);
+    let keys = |r: &offsave_server::store::rules::StoredRule| -> Vec<String> {
+        r.rule.targets.iter().flat_map(|t| t.keys.clone()).collect()
+    };
+    // 先に作った A はそのまま。B は重なるものを外して残りを持ち、空になった C は消える
+    assert_eq!(keys(&offsave_server::store::rules::get(pool, &a).await.unwrap().unwrap()), vec!["android:x", "domain:y.com"]);
+    assert_eq!(keys(&offsave_server::store::rules::get(pool, &b).await.unwrap().unwrap()), vec!["android:z"]);
+    assert!(offsave_server::store::rules::get(pool, &c).await.unwrap().is_none());
+    // もう直すものはない
+    assert_eq!(offsave_server::store::rules::dedupe_targets(pool).await.unwrap(), 0);
+}
+
+#[tokio::test]
+async fn usage_history_by_day_and_by_hour_and_the_week_start_setting() {
+    let s = DevServer::start().await;
+    let (alice, bob) = (Client::new(&s, "alice@t"), Client::new(&s, "bob@t"));
+    let stranger = Client::new(&s, "mallory@t");
+    let (a_id, _) = make_friends(&alice, &bob).await;
+
+    let status = alice.status(&a_id).await;
+    assert_eq!(status.settings.week_start, 0);
+    let mut phone = alice.device("phone").await;
+    phone.heartbeat(protected()).await;
+    // 今日の始まり（論理日）から 2 時間目に 10 分、昨日に 5 分
+    let today = offsave_core::time::logical_day(now_ms(), &offsave_core::time::Clock::default());
+    let seg = |start: i64, len: i64| offsave_core::intervals::Segment {
+        key: "android:com.example.game".into(),
+        start,
+        end: start + len,
+    };
+    let two_hours = today.start + 2 * 3_600_000;
+    // 今日の始まりから 2 時間目は未来になりうるので、明日にはならないように現在より前にする
+    let at = two_hours.min(now_ms() - 11 * 60_000);
+    let (today_start, yesterday_start) = (today.start, today.start - 86_400_000);
+    let in_today = at >= today_start;
+    phone
+        .send(&DeviceMsg::Usage {
+            segments: vec![seg(at, 600_000), seg(yesterday_start + 3_600_000, 300_000)],
+            labels: vec![],
+        })
+        .await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let from = offsave_core::time::format_date(offsave_core::time::parse_date(&today.date).unwrap() - 1);
+    let (code, v) = bob.get(&format!("/users/{a_id}/usage?from={from}&days=2")).await;
+    assert_eq!(code, 200, "{v}");
+    let h: offsave_core::protocol::UsageHistory = serde_json::from_value(v).unwrap();
+    assert!(!h.hourly);
+    assert_eq!(h.buckets.len(), 2);
+    assert_eq!(h.buckets[0].date, from);
+    assert_eq!(h.buckets[0].items[0].seconds, 300);
+    if in_today {
+        assert_eq!(h.buckets[1].items[0].seconds, 600);
+    }
+
+    // 時間ごと: 24 個、昨日の 2 時間目に 5 分
+    let (code, v) = bob.get(&format!("/users/{a_id}/usage?from={from}&hourly=true")).await;
+    assert_eq!(code, 200, "{v}");
+    let h: offsave_core::protocol::UsageHistory = serde_json::from_value(v).unwrap();
+    assert!(h.hourly);
+    assert_eq!(h.buckets.len(), 24);
+    assert_eq!(h.buckets[1].items[0].seconds, 300);
+    assert!(h.buckets[0].items.is_empty());
+
+    // 見られるのは本人と友達だけ。日付や日数が変なときは弾く
+    assert_eq!(stranger.get(&format!("/users/{a_id}/usage?from={from}")).await.0, 403);
+    assert_eq!(bob.get(&format!("/users/{a_id}/usage?from=nope")).await.0, 400);
+    assert_eq!(bob.get(&format!("/users/{a_id}/usage?from={from}&days=99")).await.0, 400);
+
+    // 週の始まりは本人が変えられ、友達には通知されない（表示だけの設定）
+    let events_before = bob.get("/events?limit=50").await.1.as_array().unwrap().len();
+    let (code, v) = alice
+        .put("/me/settings", json!({ "timezone": "Asia/Tokyo", "day_boundary_min": 240, "week_start": 6 }))
+        .await;
+    assert_eq!(code, 200, "{v}");
+    assert_eq!(alice.status(&a_id).await.settings.week_start, 6);
+    assert_eq!(bob.get("/events?limit=50").await.1.as_array().unwrap().len(), events_before);
+    let (code, _) = alice
+        .put("/me/settings", json!({ "timezone": "Asia/Tokyo", "day_boundary_min": 240, "week_start": 7 }))
+        .await;
+    assert_eq!(code, 400);
 }
 
 #[tokio::test]

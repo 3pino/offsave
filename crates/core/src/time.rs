@@ -11,6 +11,7 @@ use crate::Ms;
 
 pub const MIN_MS: Ms = 60_000;
 pub const DAY_MS: Ms = 86_400_000;
+pub const HOUR_MS: Ms = 3_600_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Clock {
@@ -65,7 +66,11 @@ pub fn local(now: Ms, clock: &Clock) -> LocalTime {
 
 pub fn logical_day(now: Ms, clock: &Clock) -> Day {
     let shifted = now + (clock.utc_offset_min as Ms - clock.day_boundary_min as Ms) * MIN_MS;
-    let d = shifted.div_euclid(DAY_MS);
+    logical_day_of(shifted.div_euclid(DAY_MS), clock)
+}
+
+/// 日付（1970-01-01 からの日数）の論理日。
+pub fn logical_day_of(d: i64, clock: &Clock) -> Day {
     let start = d * DAY_MS - (clock.utc_offset_min as Ms - clock.day_boundary_min as Ms) * MIN_MS;
     Day {
         date: format_date(d),

@@ -1,4 +1,4 @@
-use offsave_core::model::{Limit, Override, Rule, Target};
+use offsave_core::model::{Limit, Override, Rule, Target, keys_overlap};
 use sqlx::SqlitePool;
 
 use crate::db::{new_id, now_ms};
@@ -44,6 +44,47 @@ pub async fn list(pool: &SqlitePool, owner_id: &str) -> Result<Vec<StoredRule>, 
             .fetch_all(pool)
             .await?;
     Ok(rows.into_iter().filter_map(RuleRow::into_stored).collect())
+}
+
+/// 1 つのアプリ・サイトを複数のルールに入れられなくしたので、すでに重なっているものを直す。
+/// 作った順（古いルールが先）に見て、すでに使われている識別子を、後のルールから外す。
+/// 対象が空になったルールは削除する。重なりが無ければ何もしない（起動のたびに呼んでよい）。
+/// 変えたルールの数を返す。
+pub async fn dedupe_targets(pool: &SqlitePool) -> Result<usize, sqlx::Error> {
+    let owners: Vec<(String,)> = sqlx::query_as("SELECT DISTINCT owner_id FROM rules")
+        .fetch_all(pool)
+        .await?;
+    let mut changed = 0;
+    for (owner_id,) in owners {
+        let mut used: Vec<String> = Vec::new();
+        for stored in list(pool, &owner_id).await? {
+            let mut rule = stored.rule;
+            let before = rule.targets.clone();
+            let mut targets = Vec::new();
+            for mut t in std::mem::take(&mut rule.targets) {
+                t.keys.retain(|k| !used.iter().any(|u| keys_overlap(u, k)));
+                if !t.keys.is_empty() {
+                    targets.push(t);
+                }
+            }
+            for t in &targets {
+                used.extend(t.keys.iter().cloned());
+            }
+            if targets == before {
+                continue;
+            }
+            changed += 1;
+            if targets.is_empty() {
+                tracing::warn!(rule = %rule.id, "対象がすべてほかのルールと重なっていたので、ルールを削除します");
+                delete(pool, &rule.id).await?;
+            } else {
+                tracing::warn!(rule = %rule.id, "ほかのルールと重なっていた対象を外しました");
+                rule.targets = targets;
+                update(pool, &rule.id, &rule).await?;
+            }
+        }
+    }
+    Ok(changed)
 }
 
 pub async fn get(pool: &SqlitePool, id: &str) -> Result<Option<StoredRule>, sqlx::Error> {

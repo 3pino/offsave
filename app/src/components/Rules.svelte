@@ -7,7 +7,7 @@
   import IconButton from '@3pino/ui-kit-web/IconButton.svelte';
   import { errorText } from '../lib/errors';
   import { addDays, duration } from '../lib/format';
-  import { limitText, todayTotal, weekdayOfDate } from '../lib/limits';
+  import { limitText, ruleDisplayName, todayTotal, weekdayOfDate } from '../lib/limits';
   import { names } from '../lib/names.svelte';
   import { session } from '../lib/session.svelte';
   import { ui } from '../lib/ui.svelte';
@@ -33,13 +33,7 @@
   let editing = $state.raw<{ person: Person; rule: Rule | null; candidates: { key: string; label: string }[] } | null>(null);
 
   /** その人の対象に選べるもの: 自分ならこのデバイスのアプリ、それに加えて、その人が使ったことのあるもの */
-  function candidatesOf(p: Person): { key: string; label: string }[] {
-    const map = new Map<string, string>();
-    if (p.mine) for (const a of names.apps) map.set(`android:${a.package}`, a.label);
-    for (const l of p.status?.labels ?? []) if (!map.has(l.key)) map.set(l.key, l.label);
-    for (const u of p.status?.usage_today ?? []) if (!map.has(u.key)) map.set(u.key, names.label(u.key));
-    return [...map].map(([key, label]) => ({ key, label }));
-  }
+  const candidatesOf = (p: Person) => names.candidates(p.status, p.mine);
 
   // 「監視を一時停止するアプリ」を選んでいるところ（友達だけが決められる）
   let pausePickingId = $state<string | null>(null);
@@ -106,12 +100,15 @@
   }
 
   async function remove(r: Rule) {
-    const ok = await ui.confirm({ title: 'ルールを削除しますか？', body: `「${r.name}」を削除します。`, okLabel: '削除する', danger: true });
+    const ok = await ui.confirm({ title: 'ルールを削除しますか？', body: `「${ruleDisplayName(r)}」を削除します。`, okLabel: '削除する', danger: true });
     if (ok) await act(() => api.deleteRule(r.id));
   }
 
-  const ruleName = (s: UserStatus, id: string | null) =>
-    id ? (s.rules.find((r) => r.rule.id === id)?.rule.name ?? '一部のルール') : 'すべての制限';
+  function ruleName(s: UserStatus, id: string | null): string {
+    if (!id) return 'すべての制限';
+    const found = s.rules.find((r) => r.rule.id === id);
+    return found ? ruleDisplayName(found.rule) : '一部のルール';
+  }
 </script>
 
 {#snippet ruleCard(person: Person, status: UserStatus, rs: RuleStatus)}
@@ -119,7 +116,7 @@
   {@const total = todayTotal(rule.limits, weekdayOfDate(status.date))}
   <div class="card">
     <div class="card-title">
-      <span class="grow">{rule.name}{rule.enabled ? '' : '（無効）'}</span>
+      <span class="grow">{ruleDisplayName(rule)}{rule.enabled ? '' : '（無効）'}</span>
       <!-- 自分のルールも、緩めない変更はできる。削除は友達だけ -->
       <IconButton label="編集" icon={Pencil} onclick={() => openEditor(person, rule)} />
       {#if !person.mine}
@@ -147,6 +144,7 @@
     ownerName={editing.person.mine ? 'あなた' : `${editing.person.user.display_name} さん`}
     initial={editing.rule}
     candidates={editing.candidates}
+    otherRules={(editing.person.status?.rules ?? []).map((r) => r.rule).filter((r) => r.id !== editing?.rule?.id)}
     onsave={save}
     oncancel={() => (editing = null)}
   />

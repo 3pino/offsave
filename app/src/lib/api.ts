@@ -5,6 +5,7 @@ import type {
   Override,
   Rule,
   RuleInput,
+  UsageHistory,
   User,
   UserSettings,
   UserStatus,
@@ -71,6 +72,9 @@ export class Api {
   removeDevice = (id: string) => this.req<{ ok: boolean }>('DELETE', `/devices/${id}`);
 
   status = (userId: string) => this.req<UserStatus>('GET', `/users/${userId}/status`);
+  /** 利用の履歴。`from`（論理日）から `days` 日ぶん。`hourly` なら、`from` の 1 日を 1 時間ごと（24 個） */
+  usage = (userId: string, from: string, days = 7, hourly = false) =>
+    this.req<UsageHistory>('GET', `/users/${userId}/usage?from=${from}&days=${days}${hourly ? '&hourly=true' : ''}`);
   createRule = (userId: string, rule: RuleInput) => this.req<Rule>('POST', `/users/${userId}/rules`, rule);
   updateRule = (id: string, rule: RuleInput) => this.req<Rule>('PUT', `/rules/${id}`, rule);
   deleteRule = (id: string) => this.req<{ ok: boolean }>('DELETE', `/rules/${id}`);

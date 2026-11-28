@@ -6,9 +6,9 @@ use offsave_core::Ms;
 use offsave_core::engine::used_ms;
 use offsave_core::intervals::{Segment, merge, union_len};
 use offsave_core::protocol::{
-    Event, EventKind, Policy, RuleStatus, UsageItem, UserStatus,
+    Event, EventKind, Policy, RuleStatus, UsageBucket, UsageHistory, UsageItem, UserStatus,
 };
-use offsave_core::time::logical_day;
+use offsave_core::time::{HOUR_MS, logical_day, logical_day_of};
 
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
@@ -82,7 +82,15 @@ pub async fn build_policy(
     Ok(Policy {
         server_time: now,
         clock,
-        rules: stored.into_iter().map(|s| s.rule).collect(),
+        // 名前が空のルールは、対象から作った名前を入れて渡す（古いアプリでも、制限の画面に名前が出る）
+        rules: stored
+            .into_iter()
+            .map(|s| {
+                let mut rule = s.rule;
+                rule.name = rule.display_name();
+                rule
+            })
+            .collect(),
         overrides: overrides.iter().map(|o| o.to_override()).collect(),
         unlock_until,
         last_unlock_end,
@@ -90,6 +98,65 @@ pub async fn build_policy(
         others: merge_by_key(others),
         pause_apps: pause_apps::list(&state.pool, &user.id).await?,
     })
+}
+
+/// 日ごと（`hourly` なら `from` の 1 日を 1 時間ごと）の利用。`from` は論理日の日付（`days` 日ぶん）。
+pub async fn usage_history(
+    state: &AppState,
+    user: &UserRow,
+    from_day: i64,
+    days: u32,
+    hourly: bool,
+    now: Ms,
+) -> AppResult<UsageHistory> {
+    let clock = clock_of(user, now);
+    let days = if hourly { 1 } else { days.max(1) };
+    let day_list: Vec<_> = (0..days as i64).map(|i| logical_day_of(from_day + i, &clock)).collect();
+    let lo = day_list.first().map_or(0, |d| d.start);
+    let hi = day_list.last().map_or(0, |d| d.end);
+    let segments = usage::segments_of_user(&state.pool, &user.id, None, lo, hi).await?;
+    let mut by_key: BTreeMap<&str, Vec<(Ms, Ms)>> = BTreeMap::new();
+    for s in &segments {
+        by_key.entry(&s.key).or_default().push((s.start, s.end));
+    }
+    let items_in = |from: Ms, to: Ms| -> Vec<UsageItem> {
+        let mut items: Vec<UsageItem> = by_key
+            .iter()
+            .filter_map(|(key, ranges)| {
+                let seconds = (union_len(ranges.iter().copied(), from, to) / 1000) as u32;
+                (seconds > 0).then(|| UsageItem {
+                    key: (*key).to_owned(),
+                    seconds,
+                })
+            })
+            .collect();
+        items.sort_by(|a, b| b.seconds.cmp(&a.seconds).then_with(|| a.key.cmp(&b.key)));
+        items
+    };
+    let mut buckets = Vec::new();
+    for day in &day_list {
+        if hourly {
+            for h in 0..24 {
+                let (start, end) = (day.start + h * HOUR_MS, day.start + (h + 1) * HOUR_MS);
+                buckets.push(UsageBucket {
+                    start,
+                    end,
+                    date: day.date.clone(),
+                    weekday: day.weekday,
+                    items: items_in(start, end),
+                });
+            }
+        } else {
+            buckets.push(UsageBucket {
+                start: day.start,
+                end: day.end,
+                date: day.date.clone(),
+                weekday: day.weekday,
+                items: items_in(day.start, day.end),
+            });
+        }
+    }
+    Ok(UsageHistory { hourly, buckets })
 }
 
 pub async fn user_status(state: &AppState, user: &UserRow, now: Ms) -> AppResult<UserStatus> {

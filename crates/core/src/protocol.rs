@@ -52,6 +52,30 @@ pub struct UserSettings {
     /// IANA のタイムゾーン（例: `Asia/Tokyo`）。
     pub timezone: String,
     pub day_boundary_min: u32,
+    /// 週の始まりの曜日（0 = 月 … 6 = 日）。週の合計と棒グラフの表示だけに使う（制限には関係しない）。
+    #[serde(default)]
+    pub week_start: u8,
+}
+
+/// 利用の履歴の 1 つの区切り（1 日、または 1 時間）。識別子ごとの利用秒数（複数デバイスの同時利用は和集合）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UsageBucket {
+    /// 区切りの始まり（含む）。
+    pub start: Ms,
+    /// 区切りの終わり（含まない）。
+    pub end: Ms,
+    /// この区切りが属する論理日の日付。
+    pub date: String,
+    /// その日付の曜日（0 = 月 … 6 = 日）。
+    pub weekday: u8,
+    pub items: Vec<UsageItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UsageHistory {
+    /// 1 時間ごと（24 個）か、日ごとか。
+    pub hourly: bool,
+    pub buckets: Vec<UsageBucket>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

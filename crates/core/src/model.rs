@@ -66,7 +66,27 @@ pub fn key_matches(target: &str, key: &str) -> bool {
     }
 }
 
+/// 2 つの識別子が、同じものを指しうるか（`domain:` は、どちらかがもう一方のサブドメインでも重なる）。
+/// 1 つのアプリ・サイトは 1 つのルールにしか入れられないので、その判定に使う。
+pub fn keys_overlap(a: &str, b: &str) -> bool {
+    key_matches(a, b) || key_matches(b, a)
+}
+
 impl Rule {
+    /// 画面や通知に出す名前。名前が空なら、対象から作る（「YouTube」「YouTube ほか3件」）。
+    /// TypeScript の `ruleDisplayName`（app/src/lib/limits.ts）と同じ。
+    pub fn display_name(&self) -> String {
+        let name = self.name.trim();
+        if !name.is_empty() {
+            return name.to_owned();
+        }
+        match self.targets.as_slice() {
+            [] => "ルール".to_owned(),
+            [t] => t.label.clone(),
+            [t, rest @ ..] => format!("{} ほか{}件", t.label, rest.len()),
+        }
+    }
+
     pub fn matches(&self, key: &str) -> bool {
         self.targets
             .iter()
@@ -75,8 +95,9 @@ impl Rule {
 
     /// 保存してよい形か。だめなら理由を返す。
     pub fn validate(&self) -> Result<(), String> {
-        if self.name.trim().is_empty() || self.name.chars().count() > 60 {
-            return Err("ルール名は 1〜60 文字にしてください".into());
+        // 名前は空でよい（空なら、対象から作った名前を出す）
+        if self.name.chars().count() > 60 {
+            return Err("ルール名は 60 文字以内にしてください".into());
         }
         if self.targets.is_empty() || self.targets.len() > 50 {
             return Err("対象は 1〜50 個にしてください".into());
@@ -275,6 +296,41 @@ mod tests {
         r.limits.pop();
         r.targets[0].keys[0] = "bad key".into();
         assert!(r.validate().is_err());
+    }
+
+    #[test]
+    fn name_is_optional_and_falls_back_to_the_targets() {
+        let target = |label: &str, key: &str| Target {
+            label: label.into(),
+            keys: vec![key.into()],
+        };
+        let mut r = Rule {
+            id: "r".into(),
+            name: "".into(),
+            targets: vec![target("YouTube", "android:com.youtube")],
+            limits: vec![Limit::DailyTotal {
+                days: ALL_DAYS,
+                seconds: 3600,
+            }],
+            enabled: true,
+        };
+        assert!(r.validate().is_ok());
+        assert_eq!(r.display_name(), "YouTube");
+        r.targets.push(target("youtube.com", "domain:youtube.com"));
+        r.targets.push(target("Twitch", "android:tv.twitch"));
+        r.targets.push(target("Netflix", "android:com.netflix"));
+        assert_eq!(r.display_name(), "YouTube ほか3件");
+        r.name = "  動画  ".into();
+        assert_eq!(r.display_name(), "動画");
+    }
+
+    #[test]
+    fn overlapping_keys() {
+        assert!(keys_overlap("android:a.b", "android:a.b"));
+        assert!(keys_overlap("domain:youtube.com", "domain:m.youtube.com"));
+        assert!(keys_overlap("domain:m.youtube.com", "domain:youtube.com"));
+        assert!(!keys_overlap("domain:youtube.com", "domain:notyoutube.com"));
+        assert!(!keys_overlap("android:a.b", "domain:a.b"));
     }
 
     fn rule(targets: &[&str], limits: Vec<Limit>) -> Rule {

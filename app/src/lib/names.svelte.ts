@@ -1,7 +1,7 @@
 import { untrack } from 'svelte';
 import { isAndroid, native } from './native';
 import { keyName } from './format';
-import type { InstalledApp, KeyLabel } from './types';
+import type { InstalledApp, KeyLabel, UserStatus } from './types';
 
 /**
  * アプリ名（`android:<package>` → 表示名）。
@@ -41,6 +41,15 @@ class Names {
 
   label(key: string): string {
     return this.local.get(key) ?? this.remote[key] ?? keyName(key);
+  }
+
+  /** その人のルールの対象に選べるもの: 自分ならこのデバイスのアプリ、それに加えて、その人が使ったことのあるもの */
+  candidates(status: UserStatus | null, mine: boolean): { key: string; label: string }[] {
+    const map = new Map<string, string>();
+    if (mine) for (const a of this.apps) map.set(`android:${a.package}`, a.label);
+    for (const l of status?.labels ?? []) if (!map.has(l.key)) map.set(l.key, l.label);
+    for (const u of status?.usage_today ?? []) if (!map.has(u.key)) map.set(u.key, this.label(u.key));
+    return [...map].map(([key, label]) => ({ key, label }));
   }
 }
 
