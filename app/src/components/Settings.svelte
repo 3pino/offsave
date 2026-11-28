@@ -8,6 +8,7 @@
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Smartphone from '@lucide/svelte/icons/smartphone';
   import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
+  import Users from '@lucide/svelte/icons/users';
   import Button from '@3pino/ui-kit-web/Button.svelte';
   import IconButton from '@3pino/ui-kit-web/IconButton.svelte';
   import Section from '@3pino/ui-kit-web/Section.svelte';
@@ -24,6 +25,7 @@
   import { updater } from '../lib/updater.svelte';
   import type { UserSettings } from '../lib/types';
   import AndroidSettings from './AndroidSettings.svelte';
+  import Friends from './Friends.svelte';
   import Page from './Page.svelte';
   import ProtectionPanel from './ProtectionPanel.svelte';
   import SettingsDevices from './SettingsDevices.svelte';
@@ -46,9 +48,23 @@
     }
   }
 
+  // 友達からの申請（承認待ち）があれば、「友達」の行で知らせる
+  let incoming = $state(0);
+  async function loadIncoming() {
+    try {
+      incoming = (await api.friends()).filter((f) => f.state === 'pending_in').length;
+    } catch {
+      /* 取れないときは、知らせない */
+    }
+  }
+
   onMount(() => {
     void load();
     void updater.loadVersion();
+  });
+  // 設定の一覧に戻ったときも取り直す
+  $effect(() => {
+    if (!ui.settingsSub) void loadIncoming();
   });
 
   const changed = $derived(settings !== null && parseTime(boundary) !== settings.day_boundary_min);
@@ -127,6 +143,8 @@
   <SettingsDevices onback={closeSub} onunlink={unlink} />
 {:else if ui.settingsSub === 'hidden'}
   <SettingsHidden onback={closeSub} />
+{:else if ui.settingsSub === 'friends'}
+  <Friends onback={closeSub} />
 {:else}
 <Page title="設定" header={false}>
   <Section title="アカウント">
@@ -143,6 +161,11 @@
       </SettingRow>
       <SettingRow name="Android の設定" description="通知・データ・電池など" icon={SlidersHorizontal} onclick={() => (ui.settingsSub = 'android')} />
     {/if}
+    <SettingRow name="友達" icon={Users} onclick={() => (ui.settingsSub = 'friends')}>
+      {#snippet control()}
+        {#if incoming > 0}<span class="pill pill-bad">承認待ち {incoming}</span>{/if}
+      {/snippet}
+    </SettingRow>
     <SettingRow name="デバイス" icon={Smartphone} onclick={() => (ui.settingsSub = 'devices')} />
     <SettingRow name="非表示のアプリ" icon={Eye} onclick={() => (ui.settingsSub = 'hidden')} />
   </Section>

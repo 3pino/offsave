@@ -37,8 +37,6 @@ function load(): Stored {
 
 class UsagePrefs {
   private v = $state<Stored>(load());
-  /** ホームで見ている人（null = 自分）。保存しない（アプリを開き直すと自分に戻る） */
-  viewing = $state.raw<{ id: string; name: string } | null>(null);
 
   get showHidden() {
     return this.v.showHidden;

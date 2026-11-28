@@ -4,7 +4,6 @@
   import House from '@lucide/svelte/icons/house';
   import ListChecks from '@lucide/svelte/icons/list-checks';
   import Settings from '@lucide/svelte/icons/settings';
-  import Users from '@lucide/svelte/icons/users';
   import NavBar, { type NavBarItem } from '@3pino/ui-kit-web/NavBar.svelte';
   import { isBackKey, startBackNav } from '@3pino/app-kit-web/core/backNav';
   import { startContextMenuGuard } from '@3pino/app-kit-web/core/contextMenu';
@@ -15,7 +14,6 @@
   import Toasts from '@3pino/app-kit-web/shell/Toasts.svelte';
   import { showUpdateBadge, UPDATE_BADGE_LABEL } from '@3pino/app-kit-web/updater';
   import Events from './components/Events.svelte';
-  import Friends from './components/Friends.svelte';
   import Home from './components/Home.svelte';
   import Rules from './components/Rules.svelte';
   import Settings_ from './components/Settings.svelte';
@@ -126,7 +124,6 @@
   const items = $derived<NavBarItem[]>([
     { id: 'home', label: 'ホーム', icon: House },
     { id: 'rules', label: 'ルール', icon: ListChecks },
-    { id: 'friends', label: '友達', icon: Users },
     { id: 'events', label: '通知', icon: Bell, badge: ui.tab === 'events' ? null : events.unseen },
     { id: 'settings', label: '設定', icon: Settings, alert: protection.incomplete ? '監視が不完全' : showUpdateBadge(updater.state) ? UPDATE_BADGE_LABEL : null },
   ]);
@@ -143,8 +140,6 @@
         <Home />
       {:else if ui.tab === 'rules'}
         <Rules />
-      {:else if ui.tab === 'friends'}
-        <Friends />
       {:else if ui.tab === 'events'}
         <Events />
       {:else}

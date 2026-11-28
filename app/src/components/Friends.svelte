@@ -9,6 +9,9 @@
   import FriendDetail from './FriendDetail.svelte';
   import Page from './Page.svelte';
 
+  // 友達の一覧・申請・承認（設定の中の画面）
+  let { onback }: { onback: () => void } = $props();
+
   const api = $derived(session.api!);
 
   let friends = $state<Friend[]>([]);
@@ -63,14 +66,14 @@
     }}
   />
 {:else}
-  <Page title="友達" header={false}>
+  <Page title="友達" {onback}>
     <section class="friends-block">
       {#each friends as f (f.user.id)}
         <div class="card">
           <div class="card-title">
             <span class="grow">{f.user.display_name} <span class="muted small">{f.user.login_name}</span></span>
             {#if f.state === 'accepted'}
-              <Button variant="primary" onclick={() => (open = f)}>見る</Button>
+              <Button variant="primary" onclick={() => (open = f)}>詳細</Button>
             {:else if f.state === 'pending_in'}
               <Button variant="primary" onclick={() => act(() => api.acceptFriend(f.user.id))}>承認</Button>
               <Button onclick={() => act(() => api.removeFriend(f.user.id))}>断る</Button>

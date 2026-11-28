@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { untrack } from 'svelte';
   import Pencil from '@lucide/svelte/icons/pencil';
   import Plus from '@lucide/svelte/icons/plus';
   import Trash2 from '@lucide/svelte/icons/trash-2';
@@ -11,39 +11,35 @@
   import { names } from '../lib/names.svelte';
   import { session } from '../lib/session.svelte';
   import { ui } from '../lib/ui.svelte';
-  import type { Rule, RuleInput, RuleStatus, User, UserStatus } from '../lib/types';
+  import { viewing } from '../lib/viewing.svelte';
+  import type { Rule, RuleInput, RuleStatus, UserStatus } from '../lib/types';
   import KeyIcon from './KeyIcon.svelte';
   import Page from './Page.svelte';
+  import PersonHeading from './PersonHeading.svelte';
   import RuleEditor from './RuleEditor.svelte';
   import TargetPicker from './TargetPicker.svelte';
 
-  // ルールの画面。自分のルール（友達が決めたもの）と、友達のルール（自分が決められる）を、人ごとに並べる
+  // ルールの画面。見出しで選んだ人（自分、または承認済みの友達）のルールを出す。
+  // 自分のルールは友達が決めたもの、友達のルールは自分が決められる
 
-  interface Person {
-    user: User;
-    mine: boolean;
-    status: UserStatus | null;
-  }
-
-  const saved = $derived(session.saved!);
   const api = $derived(session.api!);
+  const userId = $derived(viewing.id);
+  const mine = $derived(viewing.mine);
+  const ownerName = $derived(mine ? 'あなた' : viewing.name);
 
-  let people = $state.raw<Person[]>([]);
+  let status = $state.raw<UserStatus | null>(null);
   // 編集中のルール。候補（対象に選べるアプリ・サイト）は、開いたときに 1 回だけ作る
-  let editing = $state.raw<{ person: Person; rule: Rule | null; candidates: { key: string; label: string }[] } | null>(null);
+  let editing = $state.raw<{ rule: Rule | null; candidates: { key: string; label: string }[] } | null>(null);
 
-  /** その人の対象に選べるもの: 自分ならこのデバイスのアプリ、それに加えて、その人が使ったことのあるもの */
-  const candidatesOf = (p: Person) => names.candidates(p.status, p.mine);
+  /** 対象に選べるもの: 自分ならこのデバイスのアプリ、それに加えて、その人が使ったことのあるもの */
+  const candidates = () => names.candidates(status, mine);
 
   // 「監視を一時停止するアプリ」を選んでいるところ（友達だけが決められる）
-  let pausePickingId = $state<string | null>(null);
-  // 選んでいる間も 5 秒ごとに取り直すので、id で持ち、最新の状態を引く
-  const pausePicking = $derived(people.find((p) => p.user.id === pausePickingId) ?? null);
-  const pauseCandidates = (p: Person) => candidatesOf(p).filter((c) => c.key.startsWith('android:'));
-  const setPause = (p: Person, keys: string[]) => act(() => api.setPauseApps(p.user.id, keys));
+  let pausePicking = $state(false);
+  const setPause = (keys: string[]) => act(() => api.setPauseApps(userId, keys));
 
-  function openEditor(person: Person, rule: Rule | null) {
-    editing = { person, rule, candidates: candidatesOf(person) };
+  function openEditor(rule: Rule | null) {
+    editing = { rule, candidates: candidates() };
   }
 
   // 戻る操作（Android の戻る）で、編集を閉じる
@@ -55,37 +51,36 @@
   async function refresh() {
     // 編集中は取り直さない（入力中の画面を重くしない）
     if (editing) return;
+    const id = userId;
     try {
-      const friends = (await api.friends()).filter((f) => f.state === 'accepted');
-      const list: { user: User; mine: boolean }[] = [
-        { user: { id: saved.userId, login_name: '', display_name: 'あなた' }, mine: true },
-        ...friends.map((f) => ({ user: f.user, mine: false })),
-      ];
-      const statuses = await Promise.all(list.map((p) => api.status(p.user.id).catch(() => null)));
-      for (const s of statuses) if (s) names.learn(s.labels);
-      people = list.map((p, i) => ({ ...p, status: statuses[i] }));
+      const s = await api.status(id);
+      // 取っている間に見る人が替わっていたら、捨てる
+      if (id !== userId) return;
+      names.learn(s.labels);
+      status = s;
     } catch (e) {
       ui.toast(errorText(e), 'error');
     }
   }
 
-  onMount(() => {
-    void refresh();
+  // 見る人を変えたら、前の人の表示は捨てて取り直す。そのあとは 5 秒ごと
+  $effect(() => {
+    void userId;
+    untrack(() => {
+      status = null;
+      pausePicking = false;
+      void refresh();
+    });
     const t = setInterval(refresh, 5000);
     return () => clearInterval(t);
   });
-
-  // 友達の画面から来たときは、その人を先頭に出す
-  const ordered = $derived(
-    ui.rulesFocus ? [...people].sort((a, b) => Number(b.user.id === ui.rulesFocus) - Number(a.user.id === ui.rulesFocus)) : people,
-  );
 
   const pct = (used: number, total: number) => (total > 0 ? Math.min(100, (used / total) * 100) : 100);
 
   async function save(input: RuleInput) {
     const e = editing!;
     if (e.rule) await api.updateRule(e.rule.id, input);
-    else await api.createRule(e.person.user.id, input);
+    else await api.createRule(userId, input);
     editing = null;
     await refresh();
   }
@@ -111,15 +106,15 @@
   }
 </script>
 
-{#snippet ruleCard(person: Person, status: UserStatus, rs: RuleStatus)}
+{#snippet ruleCard(status: UserStatus, rs: RuleStatus)}
   {@const rule = rs.rule}
   {@const total = todayTotal(rule.limits, weekdayOfDate(status.date))}
   <div class="card">
     <div class="card-title">
       <span class="grow">{ruleDisplayName(rule)}{rule.enabled ? '' : '（無効）'}</span>
       <!-- 自分のルールも、緩めない変更はできる。削除は友達だけ -->
-      <IconButton label="編集" icon={Pencil} onclick={() => openEditor(person, rule)} />
-      {#if !person.mine}
+      <IconButton label="編集" icon={Pencil} onclick={() => openEditor(rule)} />
+      {#if !mine}
         <IconButton label="削除" icon={Trash2} onclick={() => remove(rule)} />
       {/if}
     </div>
@@ -139,84 +134,80 @@
   </div>
 {/snippet}
 
+{#snippet heading()}
+  <PersonHeading />
+{/snippet}
+
 {#if editing}
   <RuleEditor
-    ownerName={editing.person.mine ? 'あなた' : `${editing.person.user.display_name} さん`}
+    {ownerName}
     initial={editing.rule}
     candidates={editing.candidates}
-    otherRules={(editing.person.status?.rules ?? []).map((r) => r.rule).filter((r) => r.id !== editing?.rule?.id)}
+    otherRules={(status?.rules ?? []).map((r) => r.rule).filter((r) => r.id !== editing?.rule?.id)}
     onsave={save}
     oncancel={() => (editing = null)}
   />
 {:else}
-  <Page title="ルール" header={false}>
-    {#each ordered as person (person.user.id)}
-      {@const status = person.status}
-      <section class="person">
-        <h2 class="block-title">{person.mine ? 'あなたのルール' : `${person.user.display_name} さんのルール`}</h2>
-
-        {#if status}
-          {#each status.rules as rs (rs.rule.id)}
-            {@render ruleCard(person, status, rs)}
-          {:else}
-            <p class="empty">ルールはまだありません。</p>
-          {/each}
-          <div><Button icon={Plus} onclick={() => openEditor(person, null)}>ルールを追加</Button></div>
-
-          {#if !person.mine || status.overrides.length > 0}
-            <h3 class="block-title">制限を外す日</h3>
-          {/if}
-          {#if !person.mine}
-            <div class="row row-wrap">
-              <Button onclick={() => act(() => api.createOverride(person.user.id, status.date, null))}>今日は制限なし</Button>
-              <Button onclick={() => act(() => api.createOverride(person.user.id, addDays(status.date, 1), null))}>明日は制限なし</Button>
-            </div>
-          {/if}
-          {#each status.overrides as o (o.id)}
-            <div class="card">
-              <div class="row">
-                <div class="grow">{o.date} は {ruleName(status, o.rule_id)}を外す</div>
-                {#if !person.mine}<Button onclick={() => act(() => api.deleteOverride(o.id))}>取り消す</Button>{/if}
-              </div>
-            </div>
-          {/each}
-
-          {#if !person.mine || status.pause_apps.length > 0}
-            <h3 class="block-title">監視を一時停止するアプリ</h3>
-            <p class="muted small">決済アプリなど、Accessibility が有効だと使えないアプリ。開いている間だけ、監視を自動で止めます。</p>
-            {#each status.pause_apps as key (key)}
-              <div class="row pause-row">
-                <KeyIcon {key} size={28} />
-                <span class="grow">{names.label(key)}</span>
-                {#if !person.mine}
-                  <IconButton label="{names.label(key)} を外す" icon={Trash2} onclick={() => setPause(person, status.pause_apps.filter((k) => k !== key))} />
-                {/if}
-              </div>
-            {/each}
-            {#if !person.mine}
-              <div><Button icon={Plus} onclick={() => (pausePickingId = person.user.id)}>アプリを追加</Button></div>
-            {/if}
-          {/if}
+  <Page title="{ownerName}のルール" {heading}>
+    <section class="person">
+      {#if status}
+        {#each status.rules as rs (rs.rule.id)}
+          {@render ruleCard(status, rs)}
         {:else}
-          <p class="empty">読み込み中…</p>
+          <p class="empty">ルールはまだありません。</p>
+        {/each}
+        <div><Button icon={Plus} onclick={() => openEditor(null)}>ルールを追加</Button></div>
+
+        {#if !mine || status.overrides.length > 0}
+          <h3 class="block-title">制限を外す日</h3>
         {/if}
-      </section>
-    {:else}
-      <p class="empty">読み込み中…</p>
-    {/each}
+        {#if !mine}
+          <div class="row row-wrap">
+            <Button onclick={() => act(() => api.createOverride(userId, status!.date, null))}>今日は制限なし</Button>
+            <Button onclick={() => act(() => api.createOverride(userId, addDays(status!.date, 1), null))}>明日は制限なし</Button>
+          </div>
+        {/if}
+        {#each status.overrides as o (o.id)}
+          <div class="card">
+            <div class="row">
+              <div class="grow">{o.date} は {ruleName(status, o.rule_id)}を外す</div>
+              {#if !mine}<Button onclick={() => act(() => api.deleteOverride(o.id))}>取り消す</Button>{/if}
+            </div>
+          </div>
+        {/each}
+
+        {#if !mine || status.pause_apps.length > 0}
+          <h3 class="block-title">監視を一時停止するアプリ</h3>
+          <p class="muted small">決済アプリなど、Accessibility が有効だと使えないアプリ。開いている間だけ、監視を自動で止めます。</p>
+          {#each status.pause_apps as key (key)}
+            <div class="row pause-row">
+              <KeyIcon {key} size={28} />
+              <span class="grow">{names.label(key)}</span>
+              {#if !mine}
+                <IconButton label="{names.label(key)} を外す" icon={Trash2} onclick={() => setPause(status!.pause_apps.filter((k) => k !== key))} />
+              {/if}
+            </div>
+          {/each}
+          {#if !mine}
+            <div><Button icon={Plus} onclick={() => (pausePicking = true)}>アプリを追加</Button></div>
+          {/if}
+        {/if}
+      {:else}
+        <p class="empty">読み込み中…</p>
+      {/if}
+    </section>
   </Page>
 {/if}
 
-{#if pausePicking}
-  {@const target = pausePicking}
+{#if pausePicking && status}
   <TargetPicker
     appsOnly
     title="監視を一時停止するアプリ"
-    candidates={pauseCandidates(target)}
-    picked={(k) => (pausePicking?.status?.pause_apps ?? []).includes(k)}
-    onpick={(k) => setPause(target, [...(pausePicking?.status?.pause_apps ?? []), k])}
-    onunpick={(k) => setPause(target, (pausePicking?.status?.pause_apps ?? []).filter((x) => x !== k))}
-    onclose={() => (pausePickingId = null)}
+    candidates={candidates().filter((c) => c.key.startsWith('android:'))}
+    picked={(k) => (status?.pause_apps ?? []).includes(k)}
+    onpick={(k) => setPause([...(status?.pause_apps ?? []), k])}
+    onunpick={(k) => setPause((status?.pause_apps ?? []).filter((x) => x !== k))}
+    onclose={() => (pausePicking = false)}
   />
 {/if}
 
