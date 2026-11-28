@@ -29,3 +29,6 @@ local.properties
 /app/src-tauri/plugins/*/android/.tauri/
 /app/src-tauri/plugins/*/android/.gradle/
 /app/src-tauri/plugins/*/android/build/
+
+# ローカルだけで使うファイル（リポジトリには入れない）
+/AGENTS.md

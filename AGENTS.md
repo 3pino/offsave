@@ -1,6 +1,6 @@
 # offsave
 
-友達どうしで見守るスクリーンタイムのアプリ。概要・動かし方は [README.md](README.md)、設計の決定事項は [docs/design/overview.md](docs/design/overview.md)。
+友達どうしで見守るスクリーンタイムのアプリ。利用・運用は [README.md](README.md)、開発・リリースの手順は [CONTRIBUTING.md](CONTRIBUTING.md)、設計の決定事項は [docs/design/overview.md](docs/design/overview.md)。
 
 ## 構成
 
@@ -17,7 +17,7 @@
 - 画面の文言は日本語。「端末」ではなく「デバイス」と書く。
 - 画面の部品・色は、disnans と同じ共有パッケージ（`@3pino/design-system`・`ui-kit-web`・`app-kit-web`）を使う。色の直書きはしない（トークンを使う）。色相は `app/src/app.css` の `--hue`（144）で、アイコン（`app/scripts/make-icons.mjs`）と同じ値にする。
 - ナビゲーションは「ホーム・ルール・友達・通知・設定」。ルールは 1 つのタブにまとめ、ルールは複数の制限（`limits`）を持つ。
-- 署名の鍵（`~/.config/offsave-keys/`）と、GitHub の Secrets は、リポジトリに入れない・出力に出さない。リリースの手順は README の「リリースの作り方」。
+- 署名の鍵（`~/.config/offsave-keys/`）と、GitHub の Secrets は、リポジトリに入れない・出力に出さない。リリースの手順は CONTRIBUTING.md の「リリースの作り方」。README.md には、利用・運用に必要なことだけを書く（開発の話は CONTRIBUTING.md へ）。
 - 見た目は、実機・エミュレーターで人が最終確認する（スクリーンショットでの確認は補助）。
 
 ## テスト
