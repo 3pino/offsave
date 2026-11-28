@@ -19,9 +19,11 @@ object AndroidSettings {
       "notifications" -> listOf(
         Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, pkg),
       )
-      // 権限（Android 13 以降は、通知だけが並ぶ）
-      "permissions" -> listOf(
-        Intent("android.intent.action.MANAGE_APP_PERMISSIONS").putExtra("android.intent.extra.PACKAGE_NAME", pkg),
+      // 使用状況へのアクセス。「権限」の画面（MANAGE_APP_PERMISSIONS）は、システム権限がないアプリからは
+      // 開けない（Permission Denial）ので、直接飛べる公開の方法がない
+      "usage_access" -> listOf(
+        Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).setData(uri),
+        Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS),
       )
       // モバイルデータの使用量（バックグラウンドのデータ・データセーバーの例外）
       "data" -> listOf(

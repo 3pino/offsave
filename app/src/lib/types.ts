@@ -132,7 +132,7 @@ export interface OffsaveEvent {
 }
 
 /** 「Android の設定」から直接開ける、このアプリの設定の項目（Kotlin の AndroidSettings.intents と対応） */
-export type AndroidSettingKind = 'notifications' | 'permissions' | 'data' | 'battery' | 'open_by_default';
+export type AndroidSettingKind = 'notifications' | 'usage_access' | 'data' | 'battery' | 'open_by_default';
 
 /** Android の強制サービスの状態（Kotlin の EnforcerPlugin.status） */
 export interface NativeStatus {

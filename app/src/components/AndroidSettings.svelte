@@ -35,11 +35,11 @@
       warn: '通知の全体のスイッチは off にしないでください。種類ごとの調整はできます。',
     },
     {
-      kind: 'permissions',
-      name: '権限',
-      description: 'このアプリに許可している権限',
+      kind: 'usage_access',
+      name: '使用状況へのアクセス',
+      description: '決済アプリのあいだの一時停止に使う許可',
       icon: Lock,
-      warn: '権限は off にしないでください。見るだけにしてください。',
+      warn: '使用状況へのアクセスは off にしないでください。見るだけにしてください。',
     },
     {
       kind: 'data',
