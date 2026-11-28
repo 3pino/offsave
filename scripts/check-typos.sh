@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 誤字と、文言の決まり（AGENTS.md）の違反を探す。見つかったら 1 で終わる。
+# 誤字と、文言の決まりの違反を探す。見つかったら 1 で終わる。
 #
 #   scripts/check-typos.sh
 #
