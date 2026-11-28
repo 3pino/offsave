@@ -8,18 +8,22 @@
     title: string;
     /** まだ来ていない日・時間（薄く出す） */
     future?: boolean;
-    /** 今日・今の時間（強調して出す） */
-    current?: boolean;
   }
 </script>
 
 <script lang="ts">
   // 棒グラフ。棒（と、その下の文字）を押すと選べる。選んだ棒の数字は、親が上に出す
-  let { bars, selected, onselect }: { bars: Bar[]; selected: number | null; onselect: (i: number) => void } = $props();
+  let {
+    bars,
+    selected,
+    max,
+    onselect,
+  }: { bars: Bar[]; selected: number | null; max?: number; onselect: (i: number) => void } = $props();
 
-  // 一番長い棒を基準にする。短すぎる棒も、押せるように最低の高さを持たせる
-  const max = $derived(Math.max(60, ...bars.map((b) => b.value)));
-  const height = (b: Bar) => (b.value > 0 ? Math.max(4, Math.round((b.value / max) * 100)) : 0);
+  // `max`（秒）を渡すと、これが棒の最大の高さ。渡さなければ一番長い棒を基準にする。
+  // 短すぎる棒も、押せるように最低の高さを持たせる
+  const top = $derived(max ?? Math.max(60, ...bars.map((b) => b.value)));
+  const height = (b: Bar) => (b.value > 0 ? Math.min(100, Math.max(4, Math.round((b.value / top) * 100))) : 0);
 </script>
 
 <div class="chart" class:chart-dense={bars.length > 12} role="group" aria-label="利用時間の棒グラフ">
@@ -29,7 +33,6 @@
       class="col"
       class:selected={selected === i}
       class:future={b.future}
-      class:current={b.current}
       aria-label={b.title}
       aria-pressed={selected === i}
       title={b.title}
@@ -80,7 +83,6 @@
     opacity: 0.55;
     border-radius: var(--radius-xs) var(--radius-xs) 0 0;
   }
-  .current .fill,
   .selected .fill {
     opacity: 1;
   }

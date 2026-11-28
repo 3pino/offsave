@@ -4,8 +4,8 @@ import type { Rule, UsageItem } from './types';
 
 // 利用の表示まわりの、画面に依らない計算（週の区切り・合計・ルールごとのまとめ）。
 
-/** これ以下（秒）の利用は、初めは隠す（「続きを表示」で見られる） */
-export const SHORT_SECONDS = 60;
+/** これ以下（秒）の利用は、初めは隠す（「続きを表示」で見られる）。3 分 */
+export const SHORT_SECONDS = 180;
 
 export const isSite = (key: string) => key.startsWith('domain:');
 
@@ -35,23 +35,28 @@ export type UsageTarget = { kind: 'key'; key: string } | { kind: 'rule'; id: str
 
 /** 一覧に出す行。アプリ・サイト 1 つか、ルール（まとまり）1 つ */
 export type UsageRow =
-  | { kind: 'key'; key: string; seconds: number }
-  | { kind: 'rule'; rule: Rule; seconds: number; children: UsageItem[] };
+  | { kind: 'key'; key: string; seconds: number; /** 有効なルールの対象（目立たせる） */ limited: boolean }
+  | { kind: 'rule'; rule: Rule; seconds: number; children: UsageItem[]; limited: boolean };
 
 const bySeconds = (a: { seconds: number }, b: { seconds: number }) => b.seconds - a.seconds;
 
+/** 有効なルールの対象になっているか（一覧で目立たせる） */
+export const isLimited = (rules: Rule[], key: string) => rules.some((r) => r.enabled && ruleMatches(r, key));
+
 /**
  * 一覧の行を作る。`byRule` なら、ルールに入っているものは、ルールの行にまとめる（合計 = 中身の合計）。
+ * ただし対象が 1 つだけのルールは、まとめずに、そのまま 1 行で出す。
  * 1 つのアプリ・サイトは 1 つのルールにしか入らないので、二重には数えない。多い順。
  */
 export function buildRows(items: UsageItem[], rules: Rule[], byRule: boolean): UsageRow[] {
-  if (!byRule) return items.map((u) => ({ kind: 'key', key: u.key, seconds: u.seconds }) as UsageRow).sort(bySeconds);
+  const single = (u: UsageItem): UsageRow => ({ kind: 'key', key: u.key, seconds: u.seconds, limited: isLimited(rules, u.key) });
+  if (!byRule) return items.map(single).sort(bySeconds);
   const rows: UsageRow[] = [];
   const grouped = new Map<string, UsageItem[]>();
   for (const u of items) {
     const rule = rules.find((r) => ruleMatches(r, u.key));
-    if (!rule) {
-      rows.push({ kind: 'key', key: u.key, seconds: u.seconds });
+    if (!rule || rule.targets.length <= 1) {
+      rows.push(single(u));
       continue;
     }
     const list = grouped.get(rule.id) ?? [];
@@ -60,7 +65,7 @@ export function buildRows(items: UsageItem[], rules: Rule[], byRule: boolean): U
   }
   for (const rule of rules) {
     const children = (grouped.get(rule.id) ?? []).sort(bySeconds);
-    if (children.length > 0) rows.push({ kind: 'rule', rule, seconds: sumSeconds(children, () => true), children });
+    if (children.length > 0) rows.push({ kind: 'rule', rule, seconds: sumSeconds(children, () => true), children, limited: rule.enabled });
   }
   return rows.sort(bySeconds);
 }

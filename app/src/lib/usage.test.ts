@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { keyMatches, keysOverlap, ruleDisplayName } from './limits';
-import { buildRows, homePick, ruleOfKey, sumSeconds, weekStartOf } from './usage';
+import { buildRows, homePick, isLimited, ruleOfKey, sumSeconds, weekStartOf } from './usage';
 import type { Rule } from './types';
 
 const rule = (id: string, name: string, targets: [string, string][]): Rule => ({
@@ -76,6 +76,17 @@ describe('合計と一覧', () => {
       'domain:m.youtube.com',
       'domain:example.com',
     ]);
+  });
+
+  it('対象が 1 つだけのルールは、まとめない。制限の対象は limited', () => {
+    const rules = [rule('r1', '', [['YouTube', 'android:youtube']]), { ...rule('r2', '', [['ゲーム', 'android:game']]), enabled: false }];
+    const rows = buildRows(items, rules, true);
+    expect(rows.every((r) => r.kind === 'key')).toBe(true);
+    const limited = Object.fromEntries(rows.map((r) => [(r as { key: string }).key, r.limited]));
+    expect(limited['android:youtube']).toBe(true);
+    expect(limited['android:game']).toBe(false); // 無効のルール
+    expect(limited['android:secret']).toBe(false);
+    expect(isLimited(rules, 'domain:m.youtube.com')).toBe(false);
   });
 
   it('入っているルールを探す', () => {

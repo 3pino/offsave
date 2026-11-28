@@ -10,6 +10,7 @@
     onback,
     actions: pageActions,
     header = true,
+    heading,
     children,
   }: {
     title: string;
@@ -18,6 +19,8 @@
     actions?: Snippet;
     /** false なら見出しの行を出さない（ナビで開く画面。ノッチを避ける隙間だけ空ける） */
     header?: boolean;
+    /** 渡すと、題名（文字列）の代わりにこれを出す（題名を押して切り替える画面用。`title` は読み上げ用に残る） */
+    heading?: Snippet;
     children: Snippet;
   } = $props();
 </script>
@@ -26,7 +29,7 @@
   {#if header}
     <PanelBar>
       {#if onback}<IconButton label="戻る" icon={ChevronLeft} onclick={onback} />{/if}
-      <h1 class="page-title">{title}</h1>
+      {#if heading}{@render heading()}{:else}<h1 class="page-title">{title}</h1>{/if}
       {#snippet actions()}{@render pageActions?.()}{/snippet}
     </PanelBar>
   {/if}

@@ -1,4 +1,17 @@
+<script lang="ts" module>
+  import type { UsageItem } from '../lib/types';
+
+  /** 選んでいる日（または時間）の利用。`children` で、一覧を出すのに使う */
+  export interface Selection {
+    /** 選んだ日・時間の、全部の利用（`pick` で絞る前） */
+    items: UsageItem[];
+    /** 一覧の見出し（「今日の利用（2026-11-28）」など） */
+    title: string;
+  }
+</script>
+
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import ChevronLeft from '@lucide/svelte/icons/chevron-left';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import IconButton from '@3pino/ui-kit-web/IconButton.svelte';
@@ -11,16 +24,19 @@
   import { usagePrefs, type ChartMode } from '../lib/usagePrefs.svelte';
   import UsageChart, { type Bar } from './UsageChart.svelte';
 
-  // 利用時間のまとめ: 今日（いまの時点まで）と今週の合計、1 日ごと（週）・1 時間ごと（1 日）の棒グラフ。
+  // 利用時間のまとめ: 1 日ごと（週）・1 時間ごと（1 日）の棒グラフと、選んだ日・時間の合計。
+  // 棒を押すと、その日・時間に絞る（初めは今日）。`children` に、絞った利用を渡す（一覧用）。
   // `pick` が true の識別子だけを数える（ホームは「アプリだけ・非表示を除く」、詳細は「その項目だけ」）
   let {
     userId,
     status,
     pick,
+    children,
   }: {
     userId: string;
     status: UserStatus;
     pick: (key: string) => boolean;
+    children?: Snippet<[Selection]>;
   } = $props();
 
   const api = $derived(session.api!);
@@ -67,10 +83,10 @@
   });
 
   // 今日は、状態（3 秒ごと）の値を使う。履歴は 15 秒ごとなので、今日の棒と合計がずれないように
-  const todaySeconds = $derived(sumSeconds(status.usage_today, pick));
-  function daySeconds(b: { date: string; items: { key: string; seconds: number }[] }): number {
-    return b.date === today ? todaySeconds : sumSeconds(b.items, pick);
+  function dayItems(b: { date: string; items: UsageItem[] }): UsageItem[] {
+    return b.date === today ? status.usage_today : b.items;
   }
+  const daySeconds = (b: { date: string; items: UsageItem[] }) => sumSeconds(dayItems(b), pick);
   const weekSeconds = $derived((week?.buckets ?? []).reduce((s, b) => s + daySeconds(b), 0));
 
   const dateText = (d: string) => {
@@ -88,7 +104,6 @@
       value: daySeconds(b),
       title: `${dayText(b.date, b.weekday)} ${duration(daySeconds(b))}`,
       future: b.date > today,
-      current: b.date === today,
     })),
   );
   const hourBars = $derived<Bar[]>(
@@ -100,26 +115,34 @@
         value: v,
         title: `${h}時台 ${duration(v)}`,
         future: b.start > Date.now(),
-        current: b.start <= Date.now() && Date.now() < b.end,
       };
     }),
   );
 
   const dayIndex = $derived((week?.buckets ?? []).findIndex((b) => b.date === date));
+  const dayBucket = $derived(week?.buckets[dayIndex] ?? null);
+  const hourBucket = $derived(mode === 'hour' && pickedHour !== null ? (hours?.buckets[pickedHour] ?? null) : null);
 
-  // 棒を押したときに出す数字
-  const readout = $derived.by(() => {
-    if (mode === 'day') {
-      const b = week?.buckets[dayIndex];
-      return b ? { name: dayText(b.date, b.weekday), seconds: daySeconds(b) } : null;
+  // 選んでいる日・時間の利用と、その呼び方
+  const selected = $derived.by(() => {
+    if (hourBucket) {
+      const name = `${dateText(hourBucket.date)} ${hourOf(hourBucket.start)}時台`;
+      return { items: hourBucket.items, name, title: `${name}の利用` };
     }
-    if (pickedHour !== null && hours?.buckets[pickedHour]) {
-      const b = hours.buckets[pickedHour];
-      return { name: `${dateText(b.date)} ${hourOf(b.start)}時台`, seconds: sumSeconds(b.items, pick) };
-    }
-    const b = week?.buckets[dayIndex];
-    return b ? { name: `${dayText(b.date, b.weekday)} の合計`, seconds: daySeconds(b) } : null;
+    // 履歴がまだ来ていない今日は、状態の値で出す
+    const items = dayBucket ? dayItems(dayBucket) : date === today ? status.usage_today : [];
+    if (date === today) return { items, name: '今日（いまの時点まで）', title: `今日の利用（${today}）` };
+    const name = dayBucket ? dayText(dayBucket.date, dayBucket.weekday) : dateText(date);
+    return { items, name, title: `${name}の利用` };
   });
+  const selectedSeconds = $derived(sumSeconds(selected.items, pick));
+
+  // 右の合計: 時間を選んでいるときは、その日。それ以外は、その週
+  const wide = $derived(
+    hourBucket && dayBucket
+      ? { name: dayText(dayBucket.date, dayBucket.weekday), seconds: daySeconds(dayBucket) }
+      : { name: `今週（${dateText(weekFrom)}〜）`, seconds: weekSeconds },
+  );
 
   function selectDay(i: number) {
     const b = week?.buckets[i];
@@ -144,12 +167,12 @@
 <section class="stats">
   <div class="totals">
     <div class="total">
-      <span class="total-label">今日（いまの時点まで）</span>
-      <span class="total-value">{duration(todaySeconds)}</span>
+      <span class="total-label">{selected.name}</span>
+      <span class="total-value">{duration(selectedSeconds)}</span>
     </div>
     <div class="total">
-      <span class="total-label">今週（{dateText(weekFrom)}〜）</span>
-      <span class="total-value">{week ? duration(weekSeconds) : '…'}</span>
+      <span class="total-label">{wide.name}</span>
+      <span class="total-value">{week ? duration(wide.seconds) : '…'}</span>
     </div>
   </div>
 
@@ -170,15 +193,14 @@
     {/if}
   </div>
 
-  <div class="readout" aria-live="polite">
-    {#if readout}<span class="muted">{readout.name}</span> <strong>{duration(readout.seconds)}</strong>{:else}&nbsp;{/if}
-  </div>
-
   {#if mode === 'day'}
     <UsageChart bars={dayBars} selected={dayIndex >= 0 ? dayIndex : null} onselect={selectDay} />
   {:else}
-    <UsageChart bars={hourBars} selected={pickedHour} onselect={(i) => (pickedHour = pickedHour === i ? null : i)} />
+    <!-- 1 時間は 60 分までなので、棒の高さの最大は 60 分にそろえる -->
+    <UsageChart bars={hourBars} selected={pickedHour} max={3600} onselect={(i) => (pickedHour = pickedHour === i ? null : i)} />
   {/if}
+
+  {@render children?.({ items: selected.items, title: selected.title })}
 </section>
 
 <style>
@@ -198,11 +220,11 @@
     gap: var(--space-1);
   }
   .total-label {
-    font-size: var(--fs-sm);
+    font-size: var(--fs-base);
     color: var(--text-muted);
   }
   .total-value {
-    font-size: var(--fs-xl);
+    font-size: var(--fs-2xl);
     font-weight: var(--fw-bold);
   }
   .chart-head {
@@ -213,9 +235,5 @@
   }
   .chart-head :global(.segmented-option) {
     white-space: nowrap;
-  }
-  .readout {
-    min-height: 1.5em;
-    font-size: var(--fs-base);
   }
 </style>

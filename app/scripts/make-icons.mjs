@@ -74,4 +74,11 @@ writeFileSync(
     2,
   ) + '\n',
 );
-console.log(`hue ${HUE}: 背景 ${BG}、線 ${FG}`);
+// ブラウザのタブ・デスクトップのウィンドウで使う小さなアイコン（背景なしの線画。明るい・暗いどちらの地でも見える中間の明るさ）
+const FAVICON = oklchToHex(0.6, 0.13, HUE);
+mkdirSync(join(root, 'app', 'public'), { recursive: true });
+writeFileSync(
+  join(root, 'app', 'public', 'icon.svg'),
+  `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${FAVICON}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">\n  ${inner.replace(/\n\s*/g, '\n  ')}\n</svg>\n`,
+);
+console.log(`hue ${HUE}: 背景 ${BG}、線 ${FG}、ファビコン ${FAVICON}`);

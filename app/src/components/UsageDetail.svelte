@@ -57,9 +57,12 @@
         : () => false,
   );
 
-  // ルール全体のときは、中身（今日使ったもの）を並べる
-  const members = $derived(target.kind === 'rule' ? status.usage_today.filter((u) => pick(u.key)) : []);
-  const used = $derived(sumSeconds(status.usage_today, pick));
+  function setHidden(k: string, hide: boolean) {
+    if (hide) hidden.add(k);
+    else hidden.remove(k);
+    // このデバイスの表示だけの設定なので、自分の画面にだけ知らせる（友達には通知しない）
+    ui.toast(hide ? `「${names.label(k)}」を非表示にしました` : `「${names.label(k)}」を再表示しました`);
+  }
 
   // ルールの追加・編集
   let editing = $state.raw<{ rule: Rule | null; preset: Target[] } | null>(null);
@@ -116,14 +119,33 @@
       {/if}
       {#if key}
         {#if isHidden}
-          <Button icon={Eye} onclick={() => hidden.remove(key)}>再表示</Button>
+          <Button icon={Eye} onclick={() => setHidden(key, false)}>再表示</Button>
         {:else}
-          <Button icon={EyeOff} onclick={() => hidden.add(key)}>非表示</Button>
+          <Button icon={EyeOff} onclick={() => setHidden(key, true)}>非表示</Button>
         {/if}
       {/if}
     </div>
 
-    <UsageStats {userId} {status} {pick} />
+    <UsageStats {userId} {status} {pick}>
+      {#snippet children(sel)}
+        <!-- ルール全体のときは、選んだ日・時間の中身を並べる -->
+        {#if target.kind === 'rule'}
+          {@const members = sel.items.filter((u) => pick(u.key)).sort((a, b) => b.seconds - a.seconds)}
+          <section class="block">
+            <h2 class="block-title">{sel.title}（合計 {duration(sumSeconds(members, () => true))}）</h2>
+            {#each members as m (m.key)}
+              <div class="row member">
+                <KeyIcon key={m.key} size={24} />
+                <span class="grow member-name">{names.label(m.key)}</span>
+                <span class="muted">{duration(m.seconds)}</span>
+              </div>
+            {:else}
+              <p class="empty">使っていません。</p>
+            {/each}
+          </section>
+        {/if}
+      {/snippet}
+    </UsageStats>
 
     {#if target.kind === 'rule' && rule}
       <section class="block">
@@ -133,18 +155,6 @@
             <li>{limitText(l)}</li>
           {/each}
         </ul>
-      </section>
-      <section class="block">
-        <h2 class="block-title">今日の利用（合計 {duration(used)}）</h2>
-        {#each members as m (m.key)}
-          <div class="row member">
-            <KeyIcon key={m.key} size={24} />
-            <span class="grow member-name">{names.label(m.key)}</span>
-            <span class="muted">{duration(m.seconds)}</span>
-          </div>
-        {:else}
-          <p class="empty">今日は、まだ使っていません。</p>
-        {/each}
         <h2 class="block-title">対象</h2>
         <div class="muted small">{rule.targets.map((t) => t.label).join('、')}</div>
       </section>

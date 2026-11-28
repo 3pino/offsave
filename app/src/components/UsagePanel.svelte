@@ -9,12 +9,13 @@
   import { ruleDisplayName } from '../lib/limits';
   import { names } from '../lib/names.svelte';
   import type { UserStatus } from '../lib/types';
+  import type { UsageItem } from '../lib/types';
   import { buildRows, homePick, SHORT_SECONDS, type UsageTarget } from '../lib/usage';
   import { usagePrefs } from '../lib/usagePrefs.svelte';
   import KeyIcon from './KeyIcon.svelte';
   import UsageStats from './UsageStats.svelte';
 
-  // 1 人の利用のまとめ: 表示の切り替え・今日と今週の合計・棒グラフ・今日の利用の一覧（ルールごとにまとめられる）。
+  // 1 人の利用のまとめ: 表示の切り替え・合計・棒グラフ・選んだ日（時間）の利用の一覧（ルールごとにまとめられる）。
   // 行を押すと、詳細の画面（`onopen`）を開く
   let {
     userId,
@@ -30,23 +31,19 @@
 
   const unlocked = $derived(status.unlock_until > Date.now());
 
-  // 「続きを表示」: 1 分以下の利用（非表示のアプリの表示とは別）
+  // 「続きを表示」: 3 分以下の利用（非表示のアプリの表示とは別）
   let showAll = $state(false);
   /** 開いているルールの行（中身を出している） */
   let expanded = $state.raw<Set<string>>(new Set());
 
   const pick = $derived(homePick(hidden.has, usagePrefs.showHidden));
-  const items = $derived(status.usage_today.filter((u) => usagePrefs.showHidden || !hidden.has(u.key)));
-  const rows = $derived(
+  const rules = $derived(status.rules.map((r) => r.rule));
+  const rowsOf = (all: UsageItem[]) =>
     buildRows(
-      items,
-      status.rules.map((r) => r.rule),
+      all.filter((u) => usagePrefs.showHidden || !hidden.has(u.key)),
+      rules,
       usagePrefs.byRule,
-    ),
-  );
-  const main = $derived(rows.filter((r) => r.seconds > SHORT_SECONDS));
-  const restCount = $derived(rows.length - main.length);
-  const shown = $derived((showAll ? rows : main).slice(0, 60));
+    );
 
   function toggleExpanded(id: string) {
     const next = new Set(expanded);
@@ -72,21 +69,24 @@
   </SettingRow>
 </section>
 
-<UsageStats {userId} {status} {pick} />
-
+<UsageStats {userId} {status} {pick}>
+  {#snippet children(sel)}
+{@const rows = rowsOf(sel.items)}
+{@const main = rows.filter((r) => r.seconds > SHORT_SECONDS)}
+{@const restCount = rows.length - main.length}
+{@const shown = (showAll ? rows : main).slice(0, 60)}
 <section class="status-block">
-  <h2 class="block-title">今日の利用（{status.date}）</h2>
+  <h2 class="block-title">{sel.title}</h2>
   {#each shown as row (row.kind === 'rule' ? `rule:${row.rule.id}` : row.key)}
     {#if row.kind === 'key'}
-      <button type="button" class="row usage-row" onclick={() => onopen({ kind: 'key', key: row.key })}>
+      <button type="button" class="row usage-row" class:limited={row.limited} class:dim={hidden.has(row.key)} onclick={() => onopen({ kind: 'key', key: row.key })}>
         <KeyIcon key={row.key} size={28} />
         <span class="grow usage-name">{names.label(row.key)}</span>
-        {#if hidden.has(row.key)}<span class="pill pill-muted">非表示</span>{/if}
         <span class="muted">{duration(row.seconds)}</span>
       </button>
     {:else}
       {@const open = expanded.has(row.rule.id)}
-      <div class="row usage-row rule-row">
+      <div class="row usage-row rule-row" class:limited={row.limited}>
         <!-- アイコンは、ルール全体の詳細へ。名前は、中身の開閉 -->
         <button type="button" class="rule-icon" aria-label="{ruleDisplayName(row.rule)} の詳細" onclick={() => onopen({ kind: 'rule', id: row.rule.id })}>
           <SlidersHorizontal size={18} />
@@ -99,17 +99,16 @@
       </div>
       {#if open}
         {#each row.children as c (c.key)}
-          <button type="button" class="row usage-row child-row" onclick={() => onopen({ kind: 'key', key: c.key })}>
+          <button type="button" class="row usage-row child-row" class:limited={row.limited} class:dim={hidden.has(c.key)} onclick={() => onopen({ kind: 'key', key: c.key })}>
             <KeyIcon key={c.key} size={24} />
             <span class="grow usage-name">{names.label(c.key)}</span>
-            {#if hidden.has(c.key)}<span class="pill pill-muted">非表示</span>{/if}
             <span class="muted">{duration(c.seconds)}</span>
           </button>
         {/each}
       {/if}
     {/if}
   {:else}
-    <p class="empty">{restCount > 0 ? '1 分以上使ったものはありません。' : 'まだ記録がありません。'}</p>
+    <p class="empty">{restCount > 0 ? '3 分を超えて使ったものはありません。' : '記録がありません。'}</p>
   {/each}
   {#if restCount > 0 || showAll}
     <button type="button" class="link-button small" onclick={() => (showAll = !showAll)}>
@@ -117,6 +116,8 @@
     </button>
   {/if}
 </section>
+  {/snippet}
+</UsageStats>
 
 <style>
   .prefs {
@@ -124,6 +125,7 @@
     flex-direction: column;
   }
   .status-block {
+    margin-top: var(--space-3);
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
@@ -170,6 +172,14 @@
   }
   .child-row {
     padding-left: calc(var(--space-3) + 28px + var(--space-4));
+  }
+  /* 有効なルールの対象は、太字で目立たせる */
+  .limited .usage-name {
+    font-weight: var(--fw-bold);
+  }
+  /* 「非表示のアプリ」を表示しているときは、薄い文字の色にする */
+  .dim .usage-name {
+    color: var(--text-muted);
   }
   .usage-name {
     overflow: hidden;
