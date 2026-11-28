@@ -40,7 +40,7 @@
 | Linux（Ubuntu / Debian） | `offsave_*_amd64.deb` | `sudo apt install ./offsave_*_amd64.deb` |
 | Linux（その他） | `offsave_*_amd64.AppImage` | `chmod +x` で実行権限を付けて起動する |
 
-入れたあとの更新は、アプリの「設定」→「アプリの更新」からできます。新しい版があると、「設定」に点が出ます。
+入れたあとの更新は、アプリの「設定」の一番下の「バージョン」からできます。新しい版があると、「設定」に点が出ます。
 
 ### 3. サーバーに接続する
 

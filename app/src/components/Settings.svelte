@@ -1,13 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import CircleCheck from '@lucide/svelte/icons/circle-check';
   import CircleAlert from '@lucide/svelte/icons/circle-alert';
   import Download from '@lucide/svelte/icons/download';
+  import ExternalLink from '@lucide/svelte/icons/external-link';
   import Eye from '@lucide/svelte/icons/eye';
+  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Smartphone from '@lucide/svelte/icons/smartphone';
   import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
   import Button from '@3pino/ui-kit-web/Button.svelte';
+  import IconButton from '@3pino/ui-kit-web/IconButton.svelte';
   import Section from '@3pino/ui-kit-web/Section.svelte';
   import SettingRow from '@3pino/ui-kit-web/SettingRow.svelte';
   import StatusLine from '@3pino/ui-kit-web/StatusLine.svelte';
@@ -95,7 +97,22 @@
   }
 
   const st = $derived(updater.state);
+  const updating = $derived(st.kind === 'checking' || st.kind === 'downloading' || st.kind === 'installing');
   const percent = $derived(st.kind === 'downloading' && st.total ? Math.floor((st.downloaded / st.total) * 100) : null);
+  const mb = (n: number) => (n / 1024 / 1024).toFixed(1);
+
+  /** 手動で確認したときだけ、「最新です」をトーストで知らせる */
+  let checkingByHand = false;
+  function checkUpdate() {
+    checkingByHand = true;
+    void updater.check();
+  }
+  $effect(() => {
+    if (st.kind === 'latest' && checkingByHand) {
+      checkingByHand = false;
+      ui.toast('最新です');
+    }
+  });
 </script>
 
 {#if ui.settingsSub === 'protection'}
@@ -124,7 +141,7 @@
       </SettingRow>
       <SettingRow name="Android の設定" description="通知・データ・電池など" icon={SlidersHorizontal} onclick={() => (ui.settingsSub = 'android')} />
     {/if}
-    <SettingRow name="デバイスの一覧" icon={Smartphone} onclick={() => (ui.settingsSub = 'devices')} />
+    <SettingRow name="デバイス" icon={Smartphone} onclick={() => (ui.settingsSub = 'devices')} />
     <SettingRow name="非表示のアプリ" icon={Eye} onclick={() => (ui.settingsSub = 'hidden')} />
   </Section>
 
@@ -148,42 +165,51 @@
     {/if}
   </Section>
 
-  {#if updater.supported}
-    <Section title="アプリの更新">
-      <SettingRow name="バージョン" description={updater.version ? `v${updater.version}` : ''} />
+  <!-- バージョンは一番下。新しい版や、うまくいかなかったときだけ、その状態と操作を出す（「最新です」はトーストで知らせる） -->
+  <Section title="アプリについて">
+    <SettingRow name="バージョン">
+      {#snippet control()}
+        <div class="version-control">
+          <span class="version">{updater.supported ? (updater.version ? `v${updater.version}` : '…') : '開発版'}</span>
+          {#if updater.supported}
+            <IconButton label="アップデートを確認" title="アップデートを確認" disabled={updating} onclick={checkUpdate}>
+              <RefreshCw size={18} class={st.kind === 'checking' ? 'spin' : ''} />
+            </IconButton>
+          {/if}
+        </div>
+      {/snippet}
+    </SettingRow>
+
+    {#if updater.supported && st.kind !== 'idle' && st.kind !== 'checking' && st.kind !== 'latest'}
       <div class="update-state">
-        {#if st.kind === 'checking'}
-          <StatusLine busy kind="muted">確認しています…</StatusLine>
-        {:else if st.kind === 'latest'}
-          <StatusLine kind="ok" icon={CircleCheck}>最新です</StatusLine>
-        {:else if st.kind === 'available'}
+        {#if st.kind === 'available'}
           <StatusLine kind="accent" icon={Download}>新しいバージョン v{st.version} があります</StatusLine>
           {#if st.notes}<p class="muted small notes">{st.notes}</p>{/if}
         {:else if st.kind === 'permission'}
-          <StatusLine kind="warn" icon={CircleAlert}>「不明なアプリのインストール」を許可してから、もう一度「更新する」を押してください</StatusLine>
+          <StatusLine kind="warn" icon={CircleAlert}>「不明なアプリのインストール」を許可してから、戻って「続ける」を押してください</StatusLine>
         {:else if st.kind === 'downloading'}
-          <StatusLine busy kind="muted">ダウンロードしています{percent !== null ? `（${percent}%）` : ''}…</StatusLine>
+          <StatusLine busy kind="muted">ダウンロード中… {#if st.total}{percent}%{:else}{mb(st.downloaded)} MB{/if}</StatusLine>
+          <progress class="update-progress" max={st.total ?? undefined} value={st.total ? st.downloaded : undefined}></progress>
         {:else if st.kind === 'installing'}
           <StatusLine busy kind="muted">インストールしています…</StatusLine>
         {:else if st.kind === 'error'}
           <StatusLine kind="error" icon={CircleAlert}>{st.message}</StatusLine>
+          <p class="muted small">うまくいかないときは、リリースページから直接ダウンロードできます。</p>
         {/if}
-        <div class="row row-wrap">
-          {#if st.kind === 'available' || st.kind === 'permission'}
-            <Button variant="primary" onclick={() => updater.install()}>更新する</Button>
-          {/if}
-          <Button disabled={st.kind === 'checking' || st.kind === 'downloading' || st.kind === 'installing'} onclick={() => updater.check()}>更新を確認</Button>
-          {#if st.kind === 'error'}
-            <Button onclick={() => updater.openReleasePage()}>リリースのページを開く</Button>
-          {/if}
-        </div>
-      </div>
-    </Section>
-  {/if}
 
-  <Section title="このデバイス">
-    <SettingRow name={saved.deviceName || 'このデバイス'} description="連携を解除すると、このデバイスは友達から見えなくなり、制限も外れます。友達に通知されます。" />
-    <div><Button variant="danger" onclick={unlink}>連携を解除する</Button></div>
+        {#if st.kind === 'available' || st.kind === 'permission' || st.kind === 'error'}
+          <div class="row row-wrap">
+            {#if st.kind === 'available'}
+              <Button variant="primary" onclick={() => updater.install()}><Download size={15} />ダウンロードしてインストール</Button>
+            {:else if st.kind === 'permission'}
+              <Button variant="primary" onclick={() => updater.install()}>続ける</Button>
+            {:else}
+              <Button onclick={() => updater.openReleasePage()}><ExternalLink size={15} />リリースページを開く</Button>
+            {/if}
+          </div>
+        {/if}
+      </div>
+    {/if}
   </Section>
 </Page>
 {/if}
@@ -202,5 +228,19 @@
   }
   .time {
     width: 130px;
+  }
+  .version-control {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+  .version {
+    font-family: var(--mono);
+    font-size: var(--fs-sm);
+  }
+  .update-progress {
+    width: 100%;
+    height: 8px;
+    accent-color: var(--accent);
   }
 </style>

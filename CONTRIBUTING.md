@@ -7,6 +7,7 @@ offsave の開発・リリースの手順です。利用・運用の説明は [R
 - `crates/core`: ルールの判定（猶予・一時解除・日付の境界）、利用区間の和集合、サーバーとの型。
 - `crates/server`: axum + SQLite。REST と、デバイスの WebSocket（`/api/ws/device`）。環境変数は [crates/server/README.md](crates/server/README.md)。
 - `app`: Tauri + Svelte の画面。見た目は [@3pino/design-system](https://github.com/3pino/design-system)・[ui-kit-web](https://github.com/3pino/ui-kit-web)・[app-kit-web](https://github.com/3pino/app-kit-web)（disnans と同じ）。色相は 144（`app/src/app.css`）。アイコンはリポジトリ直下の `icon.svg` から `npm run icons`。
+- 戻る操作（Android の戻る・PC の Alt+←）: `ui.pushLayer` で、開いているサブ画面・ダイアログを積む。戻ると、新しいものから 1 つずつ閉じ、何も開いていなければ、ホーム以外のタブからホームへ戻り、ホームなら、アプリが裏に回る。サブ画面を作るときは、`$effect` の中で `ui.pushLayer` を呼び、返り値を返す（`Settings.svelte` を参照）。
 - `app/src-tauri/plugins/apk-updater`: Android のアプリ更新（APK を取ってインストーラーを開く）。
 - `app/src-tauri/plugins/enforcer`: Android の強制（Kotlin）。`Engine.kt` は `crates/core` の判定の移植で、`crates/core/tests/vectors/engine.json` を両方で試験して一致を保つ。
 
@@ -48,7 +49,7 @@ OFFSAVE_DEV=1 OFFSAVE_BIND=127.0.0.1:8090 OFFSAVE_DATA_DIR=/tmp/offsave-dev carg
 
 ## 更新の仕組み
 
-- **Android**: アプリの「設定」→「アプリの更新」が、GitHub の最新リリースを見て、APK を取ってインストーラーを開く。新しい版があると、トーストと「設定」の点で知らせる。APK はリリースの鍵で署名してあり、Android のインストーラーが「入っているアプリと同じ鍵」でないと入れない（ダウンロード元もこのリポジトリのリリースに限る）。
+- **Android**: アプリの「設定」の一番下の「バージョン」が、GitHub の最新リリースを見て、APK を取ってインストーラーを開く。新しい版があると、トーストと「設定」の点で知らせる。APK はリリースの鍵で署名してあり、Android のインストーラーが「入っているアプリと同じ鍵」でないと入れない（ダウンロード元もこのリポジトリのリリースに限る）。
 - **Windows / Linux（デスクトップ）**: Tauri のアップデーター。`latest.json` を見て、署名（minisign）を確かめてから入れる。公開鍵はアプリに入っている。
 - **サーバー**: `OFFSAVE_AUTO_UPDATE=1` で、最新の正式版を 10 分おきに見て、sha256 と `--version` を確かめ、DB をバックアップしてから入れ替えて再起動する。
 

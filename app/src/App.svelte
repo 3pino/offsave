@@ -71,7 +71,7 @@
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  // PC の Alt+←: Android の戻るボタンと同じく、サブ画面を 1 つ閉じる
+  // PC の Alt+←: Android の戻るボタンと同じ
   onMount(() => {
     if (isAndroid()) return;
     const onKey = (e: KeyboardEvent) => {
@@ -82,7 +82,14 @@
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  // Android の戻るボタンで、開いているサブ画面を 1 つずつ閉じる（閉じるものが無ければ、アプリが裏に回る）
+  // 確認のダイアログを開いている間は、戻る操作で「キャンセル」する
+  $effect(() => {
+    const req = ui.shell.confirmReq;
+    if (!req) return;
+    return ui.pushLayer(() => req.resolve(false));
+  });
+
+  // Android の戻るボタン: 開いているダイアログ・サブ画面を 1 つずつ閉じ、そのあとホーム以外のタブならホームへ戻る（ホームなら、アプリが裏に回る）
   $effect(() => {
     if (!isAndroid()) return;
     const nav = startBackNav({ depth: () => ui.depth(), back: () => ui.back() }, history, window, { depthKey: 'offsaveDepth' });

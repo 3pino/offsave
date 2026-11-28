@@ -19,6 +19,12 @@ class Ui {
   /** 戻る操作で閉じる層（サブ画面）。新しいものが後ろ */
   // リアクティブにしない（$effect の中から pushLayer すると、読み書きで自分を何度も作り直してしまう）
   private layers: { close: () => void }[] = [];
+  /**
+   * 層が増減したことを、depth() を読む側（Android の戻るの履歴）へ知らせる印。
+   * pushLayer・外す側は書くだけで読まないので、$effect の中から呼んでも自分を作り直さない
+   */
+  private layersChanged = $state(0);
+  private changes = 0;
 
   constructor() {
     if (typeof matchMedia === 'function') {
@@ -59,21 +65,38 @@ class Ui {
   pushLayer(close: () => void): () => void {
     const entry = { close };
     this.layers = [...this.layers, entry];
+    this.layersChanged = ++this.changes;
     return () => {
       this.layers = this.layers.filter((l) => l !== entry);
+      this.layersChanged = ++this.changes;
     };
   }
 
+  /** 戻れる回数: 開いているサブ画面・ダイアログの数 + （ホーム以外のタブにいるなら）ホームへ戻る 1 回 */
   depth(): number {
-    return this.layers.length;
+    void this.layersChanged;
+    return this.layers.length + (this.tab === 'home' ? 0 : 1);
   }
 
-  /** 1 つ戻る。戻る先がなければ false（Android ではアプリが裏に回る） */
+  /**
+   * 1 つ戻る（Android の戻る・Alt+←）。
+   * 開いているサブ画面・ダイアログがあれば閉じ、なければホーム以外のタブからホームへ戻る。
+   * どちらもなければ false（Android ではアプリが裏に回る）
+   */
   back(): boolean {
     const top = this.layers.at(-1);
-    if (!top) return false;
-    top.close();
-    return true;
+    if (top) {
+      // 先に層を外す（画面側の後始末を待つと、戻る操作 1 回で同じ層を何度も閉じてしまう。外す関数は 2 回呼ばれても安全）
+      this.layers = this.layers.slice(0, -1);
+      this.layersChanged = ++this.changes;
+      top.close();
+      return true;
+    }
+    if (this.tab !== 'home') {
+      this.selectTab('home');
+      return true;
+    }
+    return false;
   }
 }
 
